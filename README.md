@@ -8,5 +8,6 @@ This is a bunch of functions I've put together that help me all written in bash 
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [pnpm](https://pnpm.js.org/en/installation)
 
-Not important but nice to have;
+Nice to have but not required;
+- [kubectx & kubens](https://github.com/ahmetb/kubectx) - shortened to `kx` and `kn` via alias, along with `kc` for `kubectl`
 - [figlet](http://www.figlet.org/)
