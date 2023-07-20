@@ -57,6 +57,8 @@ dockerKill() {
         docker rm $container
       fi
     done
+    echo "Killing Docker"
+    killall Docker
   else
     echo "${RED}ERROR - No Argument"
     echo "${PURPLE}Please try:"
@@ -143,10 +145,16 @@ cognito_search() {
     else
       ENVIRONMENT="production"
     fi
+    if [[ "${PHONE_NUMBER:0:3}" != "+61" ]]; then
+      PHONE_NUMBER="+61${PHONE_NUMBER:1}"
+    fi
     USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile $ENVIRONMENT | jq -r '.UserPools[].Id')
     query=(aws cognito-idp list-users --user-pool-id $USER_POOL --profile $ENVIRONMENT --limit 20 --filter phone_number=\"$PHONE_NUMBER\")
     if [ "$2" = "count" ] || [ "$3" = "count" ]; then
       "${query[@]}" | jq '.Users | length'
+    # elif [ "$2" = "delete" ] || [ "$3" = "delete" ]; then
+    #   echo "Run: aws cognito-idp admin-disable-user --user-pool-id $USER_POOL --username <USERNAME> --profile $ENVIRONMENT"
+    #   "${query[@]}" | jq '.Users[].Username'
     else
       "${query[@]}" | jq '.Users'
     fi
