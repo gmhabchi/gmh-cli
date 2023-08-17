@@ -134,7 +134,18 @@ airflow_pod_clean() {
 alias PWgen="uuidgen | tr '[:upper:]' '[:lower:]' | pbcopy"
 
 git_update_dir() {
-  find . -type d -depth 1 -exec git --git-dir={}/.git --work-tree=$PWD/{} pull origin master \;
+  directory=${1:-"."}
+  for subdir in $directory/*/; do
+  if [ -d "$subdir.git" ]; then
+    echo "Processing repository: $subdir"
+    (
+      cd "$subdir" || exit
+      git checkout HEAD
+      git checkout -f master
+      git pull origin master
+    )
+  fi
+done
 }
 
 cognito_search() {
