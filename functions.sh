@@ -174,23 +174,17 @@ cognito_search() {
   fi
 }
 
-kubectl_secrets() {
+kubectl_secrets(){
   NAME=$1
   ENVIRONMENT=$2
-  SECRET_NAME=${3:-$NAME}
-  if [ -n "$NAME" ] && [ -n "$ENVIRONMENT" ]; then
-    SECRETS=$(kubectl get secrets $SECRET_NAME --context $ENVIRONMENT/main -n $NAME --template={{.data}})
-    SECRETS=$(echo "$SECRETS" | sed 's/map//g' | sed 's/\[//g' | sed 's/\]//g' | sed 's/ /,/g')
-    IFS="," read -A SECRETS_ARRAY <<<$SECRETS
-    for secret in "${SECRETS_ARRAY[@]}"; do
-      IFS=":" read -A data <<<$secret
-      output=$(echo "${data[2]}" | base64 -D)
-      echo "${data[1]}: $output"
-    done
+  NAMESPACE=$3
+  if [ -n "$NAME" ] && [ -n "$ENVIRONMENT" ] && [ -n "$NAMESPACE" ]; then
+    kubectl get secret $NAME -o jsonpath='{.data}' --context $ENVIRONMENT/main -n $NAMESPACE | jq 'to_entries | map("\(.key): \(.value | @base64d)") | .[]'
+  elif [ -n "$NAME" ]; then
+    kubectl get secret $NAME -o jsonpath='{.data}' | jq 'to_entries | map("\(.key): \(.value | @base64d)") | .[]'
   else
-    echo "${RED}Missing NAME or ENVIRONMENT${NC}"
+    echo "${RED}Missing NAME${NC}"
     echo "${GREEN}NAME:${NC} ${NAME}"
-    echo "${GREEN}  ENVIRONMENT:${NC} ${ENVIRONMENT}"
   fi
 }
 
@@ -234,10 +228,24 @@ penv() {
 }
 
 psecrets() {
+  ENVIRONMENT=$1
+  if [ -n "$ENVIRONMENT" ]; then
+    pstack $ENVIRONMENT
+  fi
   export PULUMI_SKIP_UPDATE_CHECK="true"
   name=$(pulumi stack --show-name)
   echo "${GREEN}Showing Secrets for Stack: ${PURPLE}$name${NC}"
   pulumi config --show-secrets
+}
+
+ghistory() {
+  DAYS=$1
+  if [ -z "$DATE" ]; then
+    DATE=$(date -v -1d +'%d.%-m.%Y')
+  else
+    DATE=$(date -v -"$DAYS"d +'%d.%-m.%Y')
+  fi
+  history -E | grep "$DATE"
 }
 
 glock() {

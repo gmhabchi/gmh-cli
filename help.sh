@@ -71,8 +71,8 @@ ghelp() {
       ;;
     "kubectl_secrets")
       echo "I get and decrypt the secrets in Kubernetes"
-      echo "${PURPLE}Usage${GREEN}: kubectl_secrets <NAME> <ENVIRONMENT>${NC}"
-      echo "Pass through the <SECRET_NAME> if its not the same as the NAMESPACE"
+      echo "${PURPLE}Usage${GREEN}: kubectl_secrets <NAME>${NC}"
+      echo "Pass through the <ENVIRONMENT> & <SECRET_NAME> if needed"
       echo "${PURPLE}Usage${GREEN}: kubectl_secrets <NAME> <ENVIRONMENT> <SECRET_NAME>"
       ;;
     "pstack")
@@ -83,6 +83,18 @@ ghelp() {
       echo "I change the pulumi environment for you"
       echo "${PURPLE}Usage${GREEN}: penv <ENVIRONMENT>${NC}"
       ;;
+    "psecrets")
+      echo "I get and decrypt the Pulumi secrets"
+      echo "${PURPLE}Usage${GREEN}: psecrets${NC}"
+      echo "Pass through the <ENVIRONMENT> if needed"
+      echo "${PURPLE}Usage${GREEN}: psecrets <ENVIRONMENT>${NC}"
+      ;;
+    "ghistory")
+      echo "I get the git history for you"
+      echo "${PURPLE}Usage${GREEN}: ghistory${NC}"
+      echo "Pass through the the number of days you'd like me to go back"
+      echo "${PURPLE}Usage${GREEN}: ghistory 7${NC}"
+    ;;
     "glock")
       echo "I lock the screen"
       echo "${PURPLE}Usage${GREEN}: glock${NC}"
