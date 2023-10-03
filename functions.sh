@@ -36,10 +36,12 @@ lnetwork() {
 }
 
 dockerKill() {
+  # Old Way commented out
   args=$1
   if [[ $args == 'main' ]]; then
-    echo "Killing Docker"
-    killall Docker
+    echo "Killing Docker/Orb"
+    # killall Docker
+    killall OrbStack
   elif [[ $args == 'all' ]]; then
     running=$(docker ps -q)
     docker ps --format '{{.Names}}'
@@ -64,29 +66,34 @@ dockerKill() {
     echo "${PURPLE}Please try:"
     echo "${GREEN}    dockerKill all|main${NC}"
   fi
+  
 }
 
 dockerStop() {
-  dockerList=$(docker ps -a -q)
-  if [[ -n $dockerList ]]; then
-    echo "Stopping:"
-    docker ps --format '{{.Names}}'
-    docker stop $dockerList
-  else
-    echo "No Docker containers are running locally"
-    echo "${RED}docker ps -a -q${NC} returned nothing"
-  fi
+  # Old Way
+  # dockerList=$(docker ps -a -q)
+  # if [[ -n $dockerList ]]; then
+  #   echo "Stopping:"
+  #   docker ps --format '{{.Names}}'
+  #   docker stop $dockerList
+  # else
+  #   echo "No Docker containers are running locally"
+  #   echo "${RED}docker ps -a -q${NC} returned nothing"
+  # fi
+  orb stop
 }
 
 dockerCheck() {
-  if (! docker stats --no-stream &>/dev/null); then
-    echo "Docker isn't running, so I'll start it now"
-    open /Applications/Docker.app
-    echo "Starting... wait about 10 seconds"
-    sleep 10
-  else
-    echo "Docker is Running"
-  fi
+  # Old Way
+  # if (! docker stats --no-stream &>/dev/null); then
+  #   echo "Docker isn't running, so I'll start it now"
+  #   open /Applications/Docker.app
+  #   echo "Starting... wait about 10 seconds"
+  #   sleep 10
+  # else
+  #   echo "Docker is Running"
+  # fi
+  orb &>/dev/null
 }
 
 fathomDB() {
@@ -100,6 +107,12 @@ fathomDB() {
     DB_HOST=$(pulumi --cwd .deploy --stack $environment stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack $environment stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:platform
     pulumi login s3://dabble-pulumi-state/cloud/internal-accounts
     DB_HOST=$(pulumi --cwd .deploy --stack $environment-shared-database stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack $environment-shared-database stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:internal
+  elif [[ $environment == 'staging-use2' ]] || [[ $environment == 'production-use2' ]] && [[ "$folder" == "fathom" ]]; then
+  echo "${GREEN}Updating FathomDB permissions for $environment${NC}"
+    pulumi login s3://dabble-pulumi-state/cloud/dabble-accounts
+    DB_HOST=$(pulumi --cwd .deploy --stack $environment stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack $environment stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database-us.sh setup:platform
+    pulumi login s3://dabble-pulumi-state/cloud/internal-accounts
+    DB_HOST=$(pulumi --cwd .deploy --stack $environment-shared-database stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack $environment-shared-database stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database-us.sh setup:internal
   else
     echo "Either Environment not set or you're not in the right directory:"
     echo "${RED}Environment:${NC} $environment"
@@ -238,6 +251,32 @@ psecrets() {
   pulumi config --show-secrets
 }
 
+run_wait() {
+  local timeout="$1"
+  shift
+  local cmd="$@"
+  
+  if [[ -z "$timeout" || -z "$cmd" ]]; then
+    echo "${RED}Missing <TIMEOUT> or <CMD>${NC}"
+    echo "${GREEN}  ARGS:${NC} TIMEOUT - ${timeout}"
+    echo "COMMAND - ${cmd}"
+    return 1
+  fi
+
+  while true; do
+    echo "Running: $cmd"
+    eval "$cmd"
+
+    if [[ $? -ne 0 ]]; then
+      echo "Command failed. Exiting..."
+      break
+    fi
+
+    echo "Waiting for $timeout seconds..."
+    sleep "$timeout"
+  done
+}
+
 ghistory() {
   DAYS=$1
   if [ -z "$DATE" ]; then
@@ -257,7 +296,17 @@ glock() {
 
 count() {
   if [ -n "$1" ]; then
-    echo "$1" | wc -l
+    echo "${GREEN}"Running Command:"${NC}"
+    echo $@
+    echo "----------"
+    if [[ "$@" == *get* ]] && [[ "$@" == kc* ]]; then
+      DATA=$(kubectl get ${@:3} --no-headers)
+    elif [[ "$@" == kc* ]]; then
+      DATA=$(kubectl ${@:3})
+    else
+      DATA=$($@)
+    fi
+    echo $DATA | wc -l
   else
     echo "Missing argument"
   fi

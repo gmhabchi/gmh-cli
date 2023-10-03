@@ -89,6 +89,10 @@ ghelp() {
       echo "Pass through the <ENVIRONMENT> if needed"
       echo "${PURPLE}Usage${GREEN}: psecrets <ENVIRONMENT>${NC}"
       ;;
+    "run_wait")
+      echo "I run a command and every <INTERVAL>"
+      echo "${PURPLE}Usage${GREEN}: run_wait \"<COMMAND>\" <INTERVAL>${NC}"
+      ;;
     "ghistory")
       echo "I get the git history for you"
       echo "${PURPLE}Usage${GREEN}: ghistory${NC}"
