@@ -297,6 +297,16 @@ vmLogs() {
   fi
 }
 
+logsCronjob() {
+  local job=$1
+  if [ -n "$job" ]; then
+    kubectl create job --from=cronjob/"$job" test-"$job"
+  else
+    echo "${RED}Missing Argument${NC}"
+    echo "${GREEN}  JOB:${NC} $job"
+  fi
+}
+
 run_wait() {
   local timeout="$1"
   local ignore="$2"
