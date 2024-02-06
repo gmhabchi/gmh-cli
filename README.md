@@ -11,3 +11,4 @@ This is a bunch of functions I've put together that help me all written in bash 
 Nice to have but not required;
 - [kubectx & kubens](https://github.com/ahmetb/kubectx) - shortened to `kx` and `kn` via alias, along with `kc` for `kubectl`
 - [figlet](http://www.figlet.org/)
+- [brightness](https://formulae.brew.sh/formula/brightness)

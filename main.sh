@@ -14,5 +14,8 @@ source $location/alias.sh
 # Help
 source $location/help.sh
 
+# Helper
+source $location/helper.sh
+
 # Main
 source $location/functions.sh
