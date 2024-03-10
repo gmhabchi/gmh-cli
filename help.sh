@@ -9,6 +9,7 @@ ghelp() {
     echo -e "${PURPLE}Example${GREEN}: ghelp aws-login${NC}"
     echo ""
     echo -e "${RED}alogin${NC}/${RED}aws-login${NC}: Login to AWS CLI"
+    echo -e "${RED}glogin${NC}: Login to AWS CLI for personal AWS account"
     echo -e "${RED}plogin${NC}: Login to Pulumi Project with pnpm 👌"
     echo -e "${RED}kuttle_init${NC}: Initialize kuttle"
     echo -e "${RED}git_update_dir${NC}: Update all git repositories in a directory"

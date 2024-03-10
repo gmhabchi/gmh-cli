@@ -20,6 +20,11 @@ alogin() {
   aws sso login
 }
 
+# AWS Login for ghabchi
+glogin() {
+  aws sso login --profile personal
+}
+
 #Pulumi login
 plogin() {
   pnpm pulumi:login
@@ -245,10 +250,34 @@ nodeCount() {
 }
 
 podCheck() {
-  local environments=("$@")
-  if [ "${#environments[@]}" -eq 0 ]; then
-    environments=('staging' 'staging-internal' 'production' 'production-internal' 'staging-us' 'staging-internal-us' 'production-us' 'production-internal-us')
+  staging=(staging staging-internal)
+  staging_us=(staging-us staging-internal-us)
+  production=(production production-internal)
+  production_us=(production-us production-internal-us)
+
+  local arg=("$@")
+  if [ "${#arg[@]}" -eq 0 ]; then
+    environments=("${staging[@]}" "${staging_us[@]}" "${production[@]}" "${production_us[@]}")
+  elif  [ "${#arg[@]}" -eq 1 ]; then
+    if [ "$arg" = "stag" ]; then
+      environments=("${staging[@]}")
+    elif [ "$arg" = "stag-us" ]; then
+      environments=("${staging_us[@]}")
+    elif [ "$arg" = "prod" ]; then
+      environments=("${production[@]}")
+    elif [ "$arg" = "prod-us" ]; then
+      environments=("${production_us[@]}")
+    else
+      environments=("$@")
+    fi
+  else
+    environments=("$@")
   fi
+
+  if [ "${#environments[@]}" -eq 1 ]; then
+    environments=("$environments")
+  fi
+  
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Checking $environment...${NC}"
     kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed"
@@ -258,6 +287,7 @@ podCheck() {
 
 vmLogs() {
   local pod=$1
+  # shellcheck disable=SC2317
   if [ -n "$pod" ]; then
     kubectl logs "$pod" -n monitoring -c vmagent
   else
@@ -270,7 +300,6 @@ getUnhealthyPods() {
   local namespace=$2
 
 }
-
 
 # kubectl get pods | awk '/Error/ {print $1}' | xargs kubectl delete pod
 podClean() {
@@ -336,7 +365,7 @@ run_wait() {
       fi
     fi
 
-    echo "Waiting for $timeout seconds..."
+    echo "${PURPLE}Waiting for $timeout seconds...${NC}"
     sleep "$timeout"
   done
 }
