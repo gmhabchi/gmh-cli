@@ -22,7 +22,8 @@ alogin() {
 
 # AWS Login for ghabchi
 glogin() {
-  aws sso login --profile personal
+  # shellcheck disable=SC2034
+  aws sso login --profile personal && export AWS_PROFILE=personal
 }
 
 #Pulumi login
