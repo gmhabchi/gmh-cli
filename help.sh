@@ -4,25 +4,33 @@
 ghelp() {
   if [ -z "$1" ]; then
     figlet 👌abble
-    echo "${RED}ghelp${NC}: Helpy CLI"
-    echo "${PURPLE}Usage${GREEN}: ghelp <command>"
-    echo "${PURPLE}Example${GREEN}: ghelp aws-login${NC}"
+    echo -e "${RED}ghelp${NC}: Helpy CLI"
+    echo -e "${PURPLE}Usage${GREEN}: ghelp <command>"
+    echo -e "${PURPLE}Example${GREEN}: ghelp aws-login${NC}"
     echo ""
-    echo "${RED}alogin${NC}/${RED}aws-login${NC}: Login to AWS"
-    echo "${RED}plogin${NC}: Login to Pulumi Project with pnpm 👌"
-    echo "${RED}kuttle_init${NC}: Initialize kuttle"
-    echo "${RED}git_update_dir${NC}: Update all repos in a directory"
-    echo "${RED}pdelete <S3 PATH>${NC}: Delete Pulumi Lock file from S3"
-    echo "${RED}lnetwork${NC}: Find network devices"
-    echo "${RED}dockerKill${NC}: Stop and Delete all images created locally or just Stop Docker from running"
-    echo "${RED}fathomDB${NC}: Update FathomDB permissions"
-    echo "${RED}dockerCheck${NC}: Checks that Docker is running locally and will start if it isn't"
-    echo "${RED}cognito_search${NC}: Search Cognito for phone_number"
-    echo "${RED}kubectl_secrets <NAME> <ENV>${NC}: Get Kubernetes secrets 🤫"
-    echo "${RED}pstack <ENV>${NC}: I change the pulumi stack for you based on the directory you're in"
-    echo "${RED}penv <ENV>${NC}: I change the pulumi environment for you"
-    echo "${RED}glock${NC}: I lock the screen for you"
-    echo "${RED}whoareyou${NC}: I tell you who you are 👍"
+    echo -e "${RED}alogin${NC}/${RED}aws-login${NC}: Login to AWS CLI"
+    echo -e "${RED}glogin${NC}: Login to AWS CLI for personal AWS account"
+    echo -e "${RED}plogin${NC}: Login to Pulumi Project with pnpm 👌"
+    echo -e "${RED}kuttle_init${NC}: Initialize kuttle"
+    echo -e "${RED}git_update_dir${NC}: Update all git repositories in a directory"
+    echo -e "${RED}pdelete <S3 PATH>${NC}: Delete Pulumi Lock file from S3 bucket"
+    echo -e "${RED}lnetwork${NC}: Find network devices using ARP"
+    echo -e "${RED}dockerKill${NC}: Stop and remove all Docker containers, or just stop Docker"
+    echo -e "${RED}fathomDB${NC}: Update FathomDB permissions"
+    echo -e "${RED}dockerCheck${NC}: Check and start Docker if it's not running"
+    echo -e "${RED}cognito_search${NC}: Search AWS Cognito for a user by phone_number"
+    echo -e "${RED}kubectl_secrets <NAME> <ENV>${NC}: Fetch Kubernetes secrets"
+    echo -e "${RED}pstack <ENV>${NC}: Change the Pulumi stack based on current directory"
+    echo -e "${RED}penv <ENV>${NC}: Change the Pulumi environment"
+    echo -e "${RED}glock${NC}: Lock the screen"
+    echo -e "${RED}whoareyou${NC}: Display the current user's identity"
+    echo -e "${RED}psecrets${NC}: Retrieve and decrypt Pulumi secrets"
+    echo -e "${RED}run_wait${NC}: Run a command and wait for a specified interval"
+    echo -e "${RED}nodeCount${NC}: Count nodes in a Kubernetes cluster"
+    echo -e "${RED}podCheck${NC}: Check for non-running or non-completed pods in Kubernetes"
+    echo -e "${RED}podClean${NC}: Clean up pods in a Kubernetes cluster"
+    echo -e "${RED}vmLogs${NC}: Get logs for a VM"
+    echo -e "${RED}ghistory${NC}: Get the git commit history"
     echo ""
   else
     case $1 in
@@ -92,6 +100,32 @@ ghelp() {
     "run_wait")
       echo "I run a command and every <INTERVAL>"
       echo "${PURPLE}Usage${GREEN}: run_wait \"<COMMAND>\" <INTERVAL>${NC}"
+      ;;
+    "nodeCount")
+      echo "I count the number of nodes in a Kubernetes cluster"
+      echo "${PURPLE}Usage${GREEN}: nodeCount <ENVIRONMENT>${NC}"
+      ;;
+    "podCheck")
+      echo "I check the pods in a Kubernetes cluster and show the pods that are not running or completed"
+      echo "${PURPLE}Usage${GREEN}: podCheck <ENVIRONMENT>${NC}"
+      ;;
+    "vmLogs")
+      echo "I get the logs for a VM"
+      echo "${PURPLE}Usage${GREEN}: vmLogs${NC}"
+      echo "Pass through the <VMAGENT POD NAME> if needed"
+      echo "${PURPLE}Usage${GREEN}: vmLogs <VMAGENT POD NAME>${NC}"
+      ;;
+    "podClean")
+      echo "I clean up the pods in a Kubernetes cluster"
+      echo "${PURPLE}Usage${GREEN}: podClean${NC}"
+      echo "Pass through the <ENVIRONMENT> and <NAMESPACE> if you don't want to use the current context or namespace"
+      echo "${PURPLE}Usage${GREEN}: podClean <ENVIRONMENT> <NAMESPACE>${NC}"
+      ;;
+    "vmLogs")
+      echo "I get the logs for a VM"
+      echo "${PURPLE}Usage${GREEN}: vmLogs${NC}"
+      echo "Pass through the 'follow' or 'f' to follow the logs"
+      echo "${PURPLE}Usage${GREEN}: vmLogs f${NC}"
       ;;
     "ghistory")
       echo "I get the git history for you"
