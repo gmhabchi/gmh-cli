@@ -72,7 +72,7 @@ dockerKill() {
     echo "${PURPLE}Please try:"
     echo "${GREEN}    dockerKill all|main${NC}"
   fi
-  
+
 }
 
 dockerStop() {
@@ -95,7 +95,7 @@ fathomDB() {
     pulumi login s3://dabble-pulumi-state/cloud/internal-accounts
     DB_HOST=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:internal
   elif [[ $environment == 'staging-use2' ]] || [[ $environment == 'production-use2' ]] && [[ "$folder" == "fathom" ]]; then
-  echo "${GREEN}Updating FathomDB permissions for $environment${NC}"
+    echo "${GREEN}Updating FathomDB permissions for $environment${NC}"
     pulumi login s3://dabble-pulumi-state/cloud/dabble-accounts
     DB_HOST=$(pulumi --cwd .deploy --stack "$environment" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment" stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database-us.sh setup:platform
     pulumi login s3://dabble-pulumi-state/cloud/internal-accounts
@@ -136,17 +136,17 @@ alias PWgen="uuidgen | tr '[:upper:]' '[:lower:]' | pbcopy"
 git_update_dir() {
   directory=${1:-"."}
   for subdir in "$directory"/*/; do
-  if [ -d "$subdir.git" ]; then
-    echo "Processing repository: $subdir"
-    (
-      cd "$subdir" || exit
-      git checkout HEAD
-      git checkout -f master
-      git pull origin master
-    )
-  fi
-done
- }
+    if [ -d "$subdir.git" ]; then
+      echo "Processing repository: $subdir"
+      (
+        cd "$subdir" || exit
+        git checkout HEAD
+        git checkout -f master
+        git pull origin master
+      )
+    fi
+  done
+}
 
 cognito_search() {
   PHONE_NUMBER="$1"
@@ -159,8 +159,9 @@ cognito_search() {
     if [[ "${PHONE_NUMBER:0:3}" != "+61" ]]; then
       PHONE_NUMBER="+61${PHONE_NUMBER:1}"
     fi
-    USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
+    USER_POOL=$(ws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
     query=(aws cognito-idp list-users --user-pool-id "$USER_POOL" --profile "$ENVIRONMENT" --limit 20 --filter phone_number=\"$PHONE_NUMBER\")
+
     if [ "$2" = "count" ] || [ "$3" = "count" ]; then
       "${query[@]}" | jq '.Users | length'
     else
@@ -171,7 +172,7 @@ cognito_search() {
   fi
 }
 
-kubectl_secrets(){
+kubectl_secrets() {
   NAME=$1
   ENVIRONMENT=$2
   NAMESPACE=$3
@@ -241,12 +242,16 @@ psecrets() {
 nodeCount() {
   local environment=$1
   if [ -n "$environment" ]; then
-    COUNT=$(kubectl get nodes --context "$environment/main" --no-headers | wc -l)
+    NODES=$(kubectl get nodes --context "$environment/main" -o json)
+    COUNT=$(echo "$NODES" | jq -r '.items | length')
     echo "${GREEN}$environment:${NC} $COUNT"
+    echo $NODES | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
   else
-    COUNT=$(kubectl get nodes --no-headers | wc -l)
+    NODES=$(kubectl get nodes -o json)
+    COUNT=$(echo "$NODES" | jq -r '.items | length')
     CURRENT_CONTEXT=$(cat ~/.kube/config | grep -E "^\s*current-context:" | awk '{print $2}')
     echo "${PURPLE}Current Context - ${GREEN} ${CURRENT_CONTEXT}:${NC} $COUNT"
+    echo $NODES | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
   fi
 }
 
@@ -259,7 +264,7 @@ podCheck() {
   local arg=("$@")
   if [ "${#arg[@]}" -eq 0 ]; then
     environments=("${staging[@]}" "${staging_us[@]}" "${production[@]}" "${production_us[@]}")
-  elif  [ "${#arg[@]}" -eq 1 ]; then
+  elif [ "${#arg[@]}" -eq 1 ]; then
     if [ "$arg" = "stag" ]; then
       environments=("${staging[@]}")
     elif [ "$arg" = "stag-us" ]; then
@@ -278,7 +283,7 @@ podCheck() {
   if [ "${#environments[@]}" -eq 1 ]; then
     environments=("$environments")
   fi
-  
+
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Checking $environment...${NC}"
     kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed"
@@ -347,7 +352,7 @@ run_wait() {
 
   shift
   local cmd="${*}"
-  
+
   if [[ -z "$timeout" || -z "$cmd" ]]; then
     echo "${RED}Missing <TIMEOUT> or <CMD>${NC}"
     echo "${GREEN}  ARGS:${NC} TIMEOUT - ${timeout}"
@@ -359,7 +364,7 @@ run_wait() {
     echo "${GREEN}Running: ${PURPLE}$cmd${NC}"
     eval "$cmd"
 
-    if [[ $? -ne 0  ]]; then
+    if [[ $? -ne 0 ]]; then
       error "${RED}ERROR${NC} - ${PURPLE}$cmd${NC}"
       if ! $ignore; then
         break
@@ -390,8 +395,8 @@ glock() {
 
 gbright() {
   if which brightness &>/dev/null; then
-      brightness 1
-      echo "BE BRIGHT!"
+    brightness 1
+    echo "BE BRIGHT!"
   else
     error "ewww install brightness"
     echo "  brew install brightness"
