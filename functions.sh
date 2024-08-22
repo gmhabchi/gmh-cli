@@ -80,6 +80,10 @@ dockerStop() {
 }
 
 dockerCheck() {
+  if ! orb status &>/dev/null; then
+    echo "Starting Orb"
+    orb start
+  fi
   orb &>/dev/null
 }
 
@@ -159,7 +163,7 @@ cognito_search() {
     if [[ "${PHONE_NUMBER:0:3}" != "+61" ]]; then
       PHONE_NUMBER="+61${PHONE_NUMBER:1}"
     fi
-    USER_POOL=$(ws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
+    USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
     query=(aws cognito-idp list-users --user-pool-id "$USER_POOL" --profile "$ENVIRONMENT" --limit 20 --filter phone_number=\"$PHONE_NUMBER\")
 
     if [ "$2" = "count" ] || [ "$3" = "count" ]; then
@@ -291,6 +295,45 @@ podCheck() {
   done
 }
 
+jobCheck() {
+  staging=(staging staging-internal)
+  staging_us=(staging-us staging-internal-us)
+  production=(production production-internal)
+  production_us=(production-us production-internal-us)
+
+  local arg=("$@")
+  if [ "${#arg[@]}" -eq 0 ]; then
+    environments=("${staging[@]}" "${staging_us[@]}" "${production[@]}" "${production_us[@]}")
+  elif [ "${#arg[@]}" -eq 1 ]; then
+    if [ "$arg" = "stag" ]; then
+      environments=("${staging[@]}")
+    elif [ "$arg" = "stag-us" ]; then
+      environments=("${staging_us[@]}")
+    elif [ "$arg" = "prod" ]; then
+      environments=("${production[@]}")
+    elif [ "$arg" = "prod-us" ]; then
+      environments=("${production_us[@]}")
+    else
+      environments=("$@")
+    fi
+  else
+    environments=("$@")
+  fi
+
+  if [ "${#environments[@]}" -eq 1 ]; then
+    environments=("$environments")
+  fi
+
+  for environment in "${environments[@]}"; do
+    echo "${PURPLE}Checking $environment...${NC}"
+    jobs=$(kubectl get jobs --context "$environment/main" --no-headers -A | grep -v "1/1")
+    if [[ -n "$jobs" && "$jobs" != "No resources found" ]]; then
+      echo "$jobs"
+    fi
+    echo ""
+  done
+}
+
 vmLogs() {
   local pod=$1
   # shellcheck disable=SC2317
@@ -307,7 +350,6 @@ getUnhealthyPods() {
 
 }
 
-# kubectl get pods | awk '/Error/ {print $1}' | xargs kubectl delete pod
 podClean() {
   local environment=$1
   local namespace=$2
@@ -376,14 +418,32 @@ run_wait() {
   done
 }
 
+html-live() {
+  local port="${1:-8080}"
+  local directory="${2:-.}"
+  python3 -m http.server "$port" --directory "$directory"
+}
+
 ghistory() {
-  DAYS=$1
-  if [ -z "$DATE" ]; then
-    DATE=$(date -v -1d +'%d.%-m.%Y')
-  else
-    DATE=$(date -v -"$DAYS"d +'%d.%-m.%Y')
-  fi
-  history -E | grep "$DATE"
+  DAYS=${1:-1}                            # Default to 1 day if no argument is passed
+  DATE=$(date -v -"${DAYS}"d +'%Y-%m-%d') # Format the date as 'YYYY-MM-DD'
+
+  # Convert the date to a Unix timestamp range
+  start_date=$(date -j -f "%Y-%m-%d" "$DATE" "+%s")
+  end_date=$(date -j -f "%Y-%m-%d %H:%M:%S" "$DATE 23:59:59" "+%s")
+
+  # Filter the Zsh history, convert timestamps to readable format, and clean up the output
+  awk -F: -v start="$start_date" -v end="$end_date" '{
+    if ($2 >= start && $2 <= end) {
+      command = "date -r " $2 " +%d-%m-%Y\\ %H:%M:%S"
+      command | getline timestamp
+      close(command)
+      # Extract and clean up the command part
+      split($0, parts, ";")
+      # Print readable timestamp and command
+      print timestamp " : " parts[length(parts)]
+    }
+  }' ~/.zsh_history
 }
 
 glock() {

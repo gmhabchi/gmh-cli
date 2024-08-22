@@ -31,6 +31,7 @@ ghelp() {
     echo -e "${RED}podClean${NC}: Clean up pods in a Kubernetes cluster"
     echo -e "${RED}vmLogs${NC}: Get logs for a VM"
     echo -e "${RED}ghistory${NC}: Get the git commit history"
+    echo -e "${RED}html-live${NC}: Start a live server for HTML files"
     echo ""
   else
     case $1 in
@@ -133,6 +134,14 @@ ghelp() {
       echo "Pass through the the number of days you'd like me to go back"
       echo "${PURPLE}Usage${GREEN}: ghistory 7${NC}"
     ;;
+    "html-live")
+      echo "I start a live server for HTML files"
+      echo "${PURPLE}Usage${GREEN}: html-live${NC}"
+      echo "Pass through the <PORT> if you don't want to use the default port"
+      echo "${PURPLE}Usage${GREEN}: html-live <PORT>${NC}"
+      echo "Pass through the <DIRECTORY> if you don't want to use the current directory"
+      echo "${PURPLE}Usage${GREEN}: html-live <PORT> <DIRECTORY>${NC}"
+      ;;
     "glock")
       echo "I lock the screen"
       echo "${PURPLE}Usage${GREEN}: glock${NC}"
