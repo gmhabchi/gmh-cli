@@ -154,25 +154,48 @@ git_update_dir() {
 
 cognito_search() {
   PHONE_NUMBER="$1"
-  if [ -n "$PHONE_NUMBER" ]; then
-    if [ "$2" = "production" ] || [ "$2" = "staging" ]; then
-      ENVIRONMENT="${2}"
-    else
-      ENVIRONMENT="production"
-    fi
-    if [[ "${PHONE_NUMBER:0:3}" != "+61" ]]; then
-      PHONE_NUMBER="+61${PHONE_NUMBER:1}"
-    fi
-    USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
-    query=(aws cognito-idp list-users --user-pool-id "$USER_POOL" --profile "$ENVIRONMENT" --limit 20 --filter phone_number=\"$PHONE_NUMBER\")
 
-    if [ "$2" = "count" ] || [ "$3" = "count" ]; then
-      "${query[@]}" | jq '.Users | length'
-    else
-      "${query[@]}" | jq '.Users'
-    fi
-  else
+  if [ -z "$PHONE_NUMBER" ]; then
     error "Missing Phone Number"
+    return
+  fi
+
+  ENVIRONMENT="${2:-production}"
+
+  case "$ENVIRONMENT" in
+    production | staging)
+      COUNTRY_CODE="+61"
+      ;;
+    production-us | staging-us)
+      COUNTRY_CODE="+1"
+      ;;
+    count)
+      ENVIRONMENT="production"
+      COUNTRY_CODE="+61"
+      ;;
+    *)
+      echo "Invalid environment. Defaulting to production."
+      ENVIRONMENT="production"
+      COUNTRY_CODE="+61"
+      ;;
+  esac
+
+  CLEAN_ENVIRONMENT=$(awk -v env="$ENVIRONMENT" 'BEGIN { split(env, parts, "-"); print toupper(parts[1]) "-" (index(env, "-us") ? "US" : "AU") }')
+
+  if [[ "${PHONE_NUMBER:0:1}" != "+" ]]; then
+    PHONE_NUMBER="${PHONE_NUMBER/#0/}"
+    PHONE_NUMBER="${COUNTRY_CODE}${PHONE_NUMBER}"
+  fi
+
+  echo "${GREEN}Searching for Phone Number: ${PURPLE}$PHONE_NUMBER${NC} in ${GREEN}$CLEAN_ENVIRONMENT${NC}"
+
+  USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
+  query=(aws cognito-idp list-users --user-pool-id "$USER_POOL" --profile "$ENVIRONMENT" --limit 20 --filter "phone_number=\"$PHONE_NUMBER\"")
+
+  if [[ "$3" == "count" || "$2" == "count" ]]; then
+    "${query[@]}" | jq '.Users | length'
+  else
+    "${query[@]}" | jq '.Users'
   fi
 }
 
