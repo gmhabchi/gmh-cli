@@ -477,11 +477,12 @@ glock() {
 }
 
 gbright() {
-  if which brightness &>/dev/null; then
-    brightness 1
-    echo "BE BRIGHT!"
-  else
-    error "ewww install brightness"
-    echo "  brew install brightness"
-  fi
+    info "Setting brightness to 100%"
+    for i in {1..23}; do
+        osascript <<EOD
+        tell application "System Events"
+            key code 144 -- increase brightness
+        end tell
+EOD
+    done
 }
