@@ -311,11 +311,15 @@ podCheck() {
     environments=("$environments")
   fi
 
-  for environment in "${environments[@]}"; do
-    echo "${PURPLE}Checking $environment...${NC}"
-    kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed"
-    echo ""
-  done
+for environment in "${environments[@]}"; do
+  echo "${PURPLE}Checking $environment...${NC}"
+  errors=$(kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed")
+  if [[ -z $errors ]]; then
+    echo "No errors"
+  else
+    echo "$errors"
+  fi
+done
 }
 
 jobCheck() {
