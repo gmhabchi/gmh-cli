@@ -3,6 +3,9 @@
 # debug
 # set -x
 
+location=$(dirname "$0")
+source $location/shared.sh
+
 # Who are you?
 whoareyou() {
   if [ -n "$1" ]; then
@@ -163,21 +166,21 @@ cognito_search() {
   ENVIRONMENT="${2:-production}"
 
   case "$ENVIRONMENT" in
-    production | staging)
-      COUNTRY_CODE="+61"
-      ;;
-    production-us | staging-us)
-      COUNTRY_CODE="+1"
-      ;;
-    count)
-      ENVIRONMENT="production"
-      COUNTRY_CODE="+61"
-      ;;
-    *)
-      echo "Invalid environment. Defaulting to production."
-      ENVIRONMENT="production"
-      COUNTRY_CODE="+61"
-      ;;
+  production | staging)
+    COUNTRY_CODE="+61"
+    ;;
+  production-us | staging-us)
+    COUNTRY_CODE="+1"
+    ;;
+  count)
+    ENVIRONMENT="production"
+    COUNTRY_CODE="+61"
+    ;;
+  *)
+    echo "Invalid environment. Defaulting to production."
+    ENVIRONMENT="production"
+    COUNTRY_CODE="+61"
+    ;;
   esac
 
   CLEAN_ENVIRONMENT=$(awk -v env="$ENVIRONMENT" 'BEGIN { split(env, parts, "-"); print toupper(parts[1]) "-" (index(env, "-us") ? "US" : "AU") }')
@@ -283,70 +286,24 @@ nodeCount() {
 }
 
 podCheck() {
-  staging=(staging staging-internal)
-  staging_us=(staging-us staging-internal-us)
-  production=(production production-internal)
-  production_us=(production-us production-internal-us)
-
-  local arg=("$@")
-  if [ "${#arg[@]}" -eq 0 ]; then
-    environments=("${staging[@]}" "${staging_us[@]}" "${production[@]}" "${production_us[@]}")
-  elif [ "${#arg[@]}" -eq 1 ]; then
-    if [ "$arg" = "stag" ]; then
-      environments=("${staging[@]}")
-    elif [ "$arg" = "stag-us" ]; then
-      environments=("${staging_us[@]}")
-    elif [ "$arg" = "prod" ]; then
-      environments=("${production[@]}")
-    elif [ "$arg" = "prod-us" ]; then
-      environments=("${production_us[@]}")
-    else
-      environments=("$@")
-    fi
-  else
-    environments=("$@")
-  fi
-
+  environments=($(envCheck "$@"))
   if [ "${#environments[@]}" -eq 1 ]; then
     environments=("$environments")
   fi
 
-for environment in "${environments[@]}"; do
-  echo "${PURPLE}Checking $environment...${NC}"
-  errors=$(kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed")
-  if [[ -z $errors ]]; then
-    echo "No errors"
-  else
-    echo "$errors"
-  fi
-done
+  for environment in "${environments[@]}"; do
+    echo "${PURPLE}Checking $environment...${NC}"
+    errors=$(kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed")
+    if [[ -z $errors ]]; then
+      echo "No errors"
+    else
+      echo "$errors"
+    fi
+  done
 }
 
 jobCheck() {
-  staging=(staging staging-internal)
-  staging_us=(staging-us staging-internal-us)
-  production=(production production-internal)
-  production_us=(production-us production-internal-us)
-
-  local arg=("$@")
-  if [ "${#arg[@]}" -eq 0 ]; then
-    environments=("${staging[@]}" "${staging_us[@]}" "${production[@]}" "${production_us[@]}")
-  elif [ "${#arg[@]}" -eq 1 ]; then
-    if [ "$arg" = "stag" ]; then
-      environments=("${staging[@]}")
-    elif [ "$arg" = "stag-us" ]; then
-      environments=("${staging_us[@]}")
-    elif [ "$arg" = "prod" ]; then
-      environments=("${production[@]}")
-    elif [ "$arg" = "prod-us" ]; then
-      environments=("${production_us[@]}")
-    else
-      environments=("$@")
-    fi
-  else
-    environments=("$@")
-  fi
-
+  environments=($(envCheck "$@"))
   if [ "${#environments[@]}" -eq 1 ]; then
     environments=("$environments")
   fi
@@ -391,6 +348,19 @@ podClean() {
     kubectl delete pod $(kubectl get pods -o json | jq -r '.items[] | select(.status.phase == "Failed" or .status.phase == "Error") | .metadata.name')
   fi
 }
+
+jobClean() {
+  local environment=$1
+  local namespace=$2
+  if [ -n "$environment" ] && [ -n "$namespace" ]; then
+    kubectl delete job $(kubectl get jobs -o json -n "$namespace" --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name') -n "$namespace" --context "$environment/main"
+  elif [ -n "$environment" ]; then
+    kubectl delete job $(kubectl get jobs -o json --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name')
+  else
+    kubectl delete job $(kubectl get jobs -o json | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name')
+  fi
+}
+
 
 vmLogs() {
   local follow=$1
@@ -481,12 +451,12 @@ glock() {
 }
 
 gbright() {
-    info "Setting brightness to 100%"
-    for i in {1..23}; do
-        osascript <<EOD
+  info "Setting brightness to 100%"
+  for i in {1..23}; do
+    osascript <<EOD
         tell application "System Events"
             key code 144 -- increase brightness
         end tell
 EOD
-    done
+  done
 }
