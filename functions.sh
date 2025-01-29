@@ -95,18 +95,12 @@ fathomDB() {
   environment=$1
   folder=$(basename "$PWD")
   dockerCheck
-  if [[ $environment == 'staging' ]] || [[ $environment == 'production' ]] && [[ "$folder" == "fathom" ]]; then
+  if [[ -n $environment ]] && [[ "$folder" == "fathom" ]]; then
     echo "${GREEN}Updating FathomDB permissions for $environment${NC}"
     pulumi login s3://dabble-pulumi-state/cloud/dabble-accounts
-    DB_HOST=$(pulumi --cwd .deploy --stack "$environment" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment" stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:platform
+    DB_HOST=$(pulumi --cwd .deploy --stack "$environment" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment" stack output --show-secrets rdsMasterPassword) ENV="$environment" DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:platform
     pulumi login s3://dabble-pulumi-state/cloud/internal-accounts
-    DB_HOST=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:internal
-  elif [[ $environment == 'staging-use2' ]] || [[ $environment == 'production-use2' ]] && [[ "$folder" == "fathom" ]]; then
-    echo "${GREEN}Updating FathomDB permissions for $environment${NC}"
-    pulumi login s3://dabble-pulumi-state/cloud/dabble-accounts
-    DB_HOST=$(pulumi --cwd .deploy --stack "$environment" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment" stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database-us.sh setup:platform
-    pulumi login s3://dabble-pulumi-state/cloud/internal-accounts
-    DB_HOST=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output --show-secrets rdsMasterPassword) DB_USER=master DB_SECURE=true ./server/scripts/configure-database-us.sh setup:internal
+    DB_HOST=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output rdsAddress) DB_PASS=$(pulumi --cwd .deploy --stack "$environment-shared-database" stack output --show-secrets rdsMasterPassword) ENV="$environment" DB_USER=master DB_SECURE=true ./server/scripts/configure-database.sh setup:internal
   else
     echo "Either Environment not set or you're not in the right directory:"
     echo "${RED}Environment:${NC} $environment"
@@ -360,7 +354,6 @@ jobClean() {
     kubectl delete job $(kubectl get jobs -o json | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name')
   fi
 }
-
 
 vmLogs() {
   local follow=$1
