@@ -32,6 +32,8 @@ ghelp() {
     echo -e "${RED}vmLogs${NC}: Get logs for a VM"
     echo -e "${RED}ghistory${NC}: Get the git commit history"
     echo -e "${RED}html-live${NC}: Start a live server for HTML files"
+    echo -e "${RED}downloadVideo${NC}: Download a video from a URL"
+    echo -e "${RED}vmCheck${NC}: I help put the URLs together for the VM Status Check"
     echo ""
   else
     case $1 in
@@ -128,6 +130,12 @@ ghelp() {
       echo "Pass through the 'follow' or 'f' to follow the logs"
       echo "${PURPLE}Usage${GREEN}: vmLogs f${NC}"
       ;;
+    "vmCheck")
+      echo "I help put the URLs together for the VM Status Check"
+      echo "${PURPLE}Usage${GREEN}: vmCheck${NC}"
+      echo "Pass through the <All the IPs> if needed"
+      echo "${PURPLE}Usage${GREEN}: vmCheck <IPs>${NC}"
+      ;;
     "ghistory")
       echo "I get the git history for you"
       echo "${PURPLE}Usage${GREEN}: ghistory${NC}"
@@ -141,6 +149,10 @@ ghelp() {
       echo "${PURPLE}Usage${GREEN}: html-live <PORT>${NC}"
       echo "Pass through the <DIRECTORY> if you don't want to use the current directory"
       echo "${PURPLE}Usage${GREEN}: html-live <PORT> <DIRECTORY>${NC}"
+      ;;
+    "downloadVideo")
+      echo "I download a video from a URL using yt-dlp"
+      echo "${PURPLE}Usage${GREEN}: downloadVideo <URL>${NC}"
       ;;
     "glock")
       echo "I lock the screen"

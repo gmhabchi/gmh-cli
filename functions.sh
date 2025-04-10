@@ -166,6 +166,9 @@ cognito_search() {
   production-us | staging-us)
     COUNTRY_CODE="+1"
     ;;
+  production-uk | staging-uk)
+    COUNTRY_CODE="+44"
+    ;;
   count)
     ENVIRONMENT="production"
     COUNTRY_CODE="+61"
@@ -177,7 +180,16 @@ cognito_search() {
     ;;
   esac
 
-  CLEAN_ENVIRONMENT=$(awk -v env="$ENVIRONMENT" 'BEGIN { split(env, parts, "-"); print toupper(parts[1]) "-" (index(env, "-us") ? "US" : "AU") }')
+  CLEAN_ENVIRONMENT=$(awk -v env="$ENVIRONMENT" 'BEGIN {
+  split(env, parts, "-");
+  if (index(env, "-us")) {
+    print toupper(parts[1]) "-US";
+  } else if (index(env, "-uk")) {
+    print toupper(parts[1]) "-UK";
+  } else {
+    print toupper(parts[1]) "-AU";
+  }
+}')
 
   if [[ "${PHONE_NUMBER:0:1}" != "+" ]]; then
     PHONE_NUMBER="${PHONE_NUMBER/#0/}"
@@ -408,10 +420,44 @@ run_wait() {
   done
 }
 
+vmCheck() {
+  local urls=("$@")
+  for url in "${urls[@]}"; do
+    url=${url%,}
+    full_url="http://${url}/targets?show_only_unhealthy=true"
+    echo "Checking $full_url"
+
+    errors=$(curl -s "$full_url" | grep "scrapes_failed=[1-9]" | sed -E -n '/error=[^,]+/ s/.*endpoint=([^,]+),.*error=([^,]+).*/\1/p')
+
+    if [[ -n "$errors" ]]; then
+      while IFS= read -r endpoint; do
+        echo "Opening $endpoint"
+        open "$endpoint" 2>/dev/null
+      done <<<"$errors"
+    else
+      echo "No errors found for $url"
+    fi
+  done
+}
+
 html-live() {
   local port="${1:-8080}"
   local directory="${2:-.}"
   python3 -m http.server "$port" --directory "$directory"
+}
+
+downloadVideo() {
+  local url="$1"
+  if ! command -v yt-dlp &>/dev/null; then
+    echo "yt-dlp is not installed. Please install it using 'brew install yt-dlp'"
+    return 1
+  fi
+  if [[ -z "$url" ]]; then
+    echo "Usage: download_video <URL>"
+    return 1
+  fi
+
+  yt-dlp -f bestvideo+bestaudio --merge-output-format mp4 "$url"
 }
 
 ghistory() {
