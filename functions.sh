@@ -359,11 +359,11 @@ jobClean() {
   local environment=$1
   local namespace=$2
   if [ -n "$environment" ] && [ -n "$namespace" ]; then
-    kubectl delete job $(kubectl get jobs -o json -n "$namespace" --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name') -n "$namespace" --context "$environment/main"
+    kubectl delete job $(kubectl get jobs -o json -n "$namespace" --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type | contains("Fail")) | .metadata.name') -n "$namespace" --context "$environment/main"
   elif [ -n "$environment" ]; then
-    kubectl delete job $(kubectl get jobs -o json --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name')
+    kubectl delete job $(kubectl get jobs -o json --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type | contains("Fail")) | .metadata.name')
   else
-    kubectl delete job $(kubectl get jobs -o json | jq -r '.items[] | select(.status.conditions[0].type == "Failed") | .metadata.name')
+    kubectl delete job $(kubectl get jobs -o json | jq -r '.items[] | select(.status.conditions[0].type | contains("Fail")) | .metadata.name')
   fi
 }
 
