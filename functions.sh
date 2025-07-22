@@ -316,7 +316,7 @@ jobCheck() {
 
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Checking $environment...${NC}"
-    jobs=$(kubectl get jobs --context "$environment/main" --no-headers -A | grep -v "1/1")
+    jobs=$(kubectl get jobs --context "$environment/main" --no-headers -A | grep -v "1/1" | grep -v "Running")
     if [[ -n "$jobs" && "$jobs" != "No resources found" ]]; then
       echo "$jobs"
     fi
@@ -358,12 +358,13 @@ podClean() {
 jobClean() {
   local environment=$1
   local namespace=$2
+  local jqFilter='.items[] | select(.status.conditions and (.status.conditions[]?.type | test("Fail"))) | .metadata.name'
   if [ -n "$environment" ] && [ -n "$namespace" ]; then
-    kubectl delete job $(kubectl get jobs -o json -n "$namespace" --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type | contains("Fail")) | .metadata.name') -n "$namespace" --context "$environment/main"
+    kubectl delete job $(kubectl get jobs -o json -n "$namespace" --context "$environment/main" | jq -r "$jqFilter") -n "$namespace" --context "$environment/main"
   elif [ -n "$environment" ]; then
-    kubectl delete job $(kubectl get jobs -o json --context "$environment/main" | jq -r '.items[] | select(.status.conditions[0].type | contains("Fail")) | .metadata.name')
+    kubectl delete job $(kubectl get jobs -o json --context "$environment/main" | jq -r "$jqFilter")
   else
-    kubectl delete job $(kubectl get jobs -o json | jq -r '.items[] | select(.status.conditions[0].type | contains("Fail")) | .metadata.name')
+    kubectl delete job $(kubectl get jobs -o json | jq -r "$jqFilter")
   fi
 }
 
@@ -384,40 +385,6 @@ logsCronjob() {
     echo "${RED}Missing Argument${NC}"
     echo "${GREEN}  JOB:${NC} $job"
   fi
-}
-
-run_wait() {
-  local timeout="$1"
-  local ignore="$2"
-
-  if [[ "$ignore" == "true" ]]; then
-    echo "${GREEN}Ignoring errors${NC}"
-  fi
-
-  shift
-  local cmd="${*}"
-
-  if [[ -z "$timeout" || -z "$cmd" ]]; then
-    echo "${RED}Missing <TIMEOUT> or <CMD>${NC}"
-    echo "${GREEN}  ARGS:${NC} TIMEOUT - ${timeout}"
-    echo "COMMAND - ${cmd}"
-    return 1
-  fi
-
-  while true; do
-    echo "${GREEN}Running: ${PURPLE}$cmd${NC}"
-    eval "$cmd"
-
-    if [[ $? -ne 0 ]]; then
-      error "${RED}ERROR${NC} - ${PURPLE}$cmd${NC}"
-      if ! $ignore; then
-        break
-      fi
-    fi
-
-    echo "${PURPLE}Waiting for $timeout seconds...${NC}"
-    sleep "$timeout"
-  done
 }
 
 vmCheck() {
@@ -461,14 +428,12 @@ downloadVideo() {
 }
 
 ghistory() {
-  DAYS=${1:-1}                            # Default to 1 day if no argument is passed
-  DATE=$(date -v -"${DAYS}"d +'%Y-%m-%d') # Format the date as 'YYYY-MM-DD'
+  DAYS=${1:-1}
+  DATE=$(date -v -"${DAYS}"d +'%Y-%m-%d')
 
-  # Convert the date to a Unix timestamp range
   start_date=$(date -j -f "%Y-%m-%d" "$DATE" "+%s")
   end_date=$(date -j -f "%Y-%m-%d %H:%M:%S" "$DATE 23:59:59" "+%s")
 
-  # Filter the Zsh history, convert timestamps to readable format, and clean up the output
   awk -F: -v start="$start_date" -v end="$end_date" '{
     if ($2 >= start && $2 <= end) {
       command = "date -r " $2 " +%d-%m-%Y\\ %H:%M:%S"

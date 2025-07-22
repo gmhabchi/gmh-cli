@@ -3,7 +3,7 @@
 # G Help
 ghelp() {
   if [ -z "$1" ]; then
-    figlet 👌abble
+    figlet GHelp
     echo -e "${RED}ghelp${NC}: Helpy CLI"
     echo -e "${PURPLE}Usage${GREEN}: ghelp <command>"
     echo -e "${PURPLE}Example${GREEN}: ghelp aws-login${NC}"
