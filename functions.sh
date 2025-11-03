@@ -222,24 +222,31 @@ kubectl_secrets() {
   fi
 }
 
-pstack() {
-  ENVIRONMENT=$1
-  NAME=$(basename "$PWD")
-  export PULUMI_SKIP_UPDATE_CHECK="true"
-  if [[ "$NAME" =~ ^(dabble-accounts|internal-accounts|root-account)$ ]]; then
-    NAME=""
-  elif [[ "$NAME" = ".deploy" ]]; then
-    NAME="$(basename "$(dirname "$PWD")")"
-    NAME="-$NAME"
+pstack () {
+  ENVIRONMENT=$1 
+  NAME=$(basename "$PWD") 
+  export PULUMI_SKIP_UPDATE_CHECK="true" 
+  if [[ "$NAME" =~ ^(dabble-accounts|internal-accounts|root-account)$ ]]
+  then
+          NAME="" 
+  elif [[ "$NAME" = ".deploy" ]]
+  then
+          NAME="$(basename "$(dirname "$PWD")")" 
+          NAME="-$NAME"
+  elif [[ "$NAME" == *_* ]]
+  then
+          SUFFIX="-${NAME#*_}"
+          NAME="-$(basename "$(dirname "$PWD")")$SUFFIX"
   else
-    NAME="-$NAME"
+          NAME="-$NAME" 
   fi
-  if [ -n "$ENVIRONMENT" ]; then
-    echo "Changing to the following pulumi stack - ${GREEN}$ENVIRONMENT$NAME${NC}"
-    pulumi stack select "$ENVIRONMENT$NAME"
+  if [ -n "$ENVIRONMENT" ]
+  then
+          echo "Changing to the following pulumi stack - ${GREEN}$ENVIRONMENT$NAME${NC}"
+          pulumi stack select "$ENVIRONMENT$NAME"
   else
-    echo "${RED}Missing ENVIRONMENT${NC}"
-    echo "${GREEN}  ENVIRONMENT:${NC} ${ENVIRONMENT}"
+          echo "${RED}Missing ENVIRONMENT${NC}"
+          echo "${GREEN}  ENVIRONMENT:${NC} ${ENVIRONMENT}"
   fi
 }
 
@@ -405,6 +412,42 @@ vmCheck() {
       echo "No errors found for $url"
     fi
   done
+}
+
+natGateways() {
+  local PROFILES=("$@")
+  if [ ${#PROFILES[@]} -eq 0 ]; then
+    PROFILES=("${AWS_ENVIRONMENTS[@]}")
+  fi
+
+  {
+    printf "Profile\tName\tPublic IP\n"
+
+    for PROFILE in "${PROFILES[@]}"; do
+    aws ec2 describe-nat-gateways --profile "$PROFILE" --output json \
+      | jq -r --arg profile "$PROFILE" '
+          (.NatGateways // [])[] as $ng
+          | ($ng.NatGatewayAddresses // [])[]?
+          | select(.PublicIp)
+          | [
+              $profile,
+              (($ng.Tags // []) | map(select(.Key=="Name")) | (.[0].Value // "-")),
+              .PublicIp
+            ]
+          | @tsv
+        '
+    done
+  } | column -t -s $'\t' \
+    | awk -v green="${GREEN:-}" -v nc="${NC:-}" '
+        NR==1 {
+          # Color header if GREEN/NC provided
+          print green $0 nc
+          # Underline header with dashes matching its width
+          for (i=1;i<=length($0);i++) printf "-"; printf "\n"
+          next
+        }
+        { print }
+      '
 }
 
 html-live() {

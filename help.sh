@@ -30,6 +30,7 @@ ghelp() {
     echo -e "${RED}podCheck${NC}: Check for non-running or non-completed pods in Kubernetes"
     echo -e "${RED}podClean${NC}: Clean up pods in a Kubernetes cluster"
     echo -e "${RED}vmLogs${NC}: Get logs for a VM"
+    echo -e "${RED}natGateways${NC}: List NAT Gateways in AWS"
     echo -e "${RED}ghistory${NC}: Get the git commit history"
     echo -e "${RED}html-live${NC}: Start a live server for HTML files"
     echo -e "${RED}downloadVideo${NC}: Download a video from a URL"
@@ -112,12 +113,6 @@ ghelp() {
       echo "I check the pods in a Kubernetes cluster and show the pods that are not running or completed"
       echo "${PURPLE}Usage${GREEN}: podCheck <ENVIRONMENT>${NC}"
       ;;
-    "vmLogs")
-      echo "I get the logs for a VM"
-      echo "${PURPLE}Usage${GREEN}: vmLogs${NC}"
-      echo "Pass through the <VMAGENT POD NAME> if needed"
-      echo "${PURPLE}Usage${GREEN}: vmLogs <VMAGENT POD NAME>${NC}"
-      ;;
     "podClean")
       echo "I clean up the pods in a Kubernetes cluster"
       echo "${PURPLE}Usage${GREEN}: podClean${NC}"
@@ -135,6 +130,12 @@ ghelp() {
       echo "${PURPLE}Usage${GREEN}: vmCheck${NC}"
       echo "Pass through the <All the IPs> if needed"
       echo "${PURPLE}Usage${GREEN}: vmCheck <IPs>${NC}"
+      ;;
+    "natGateways")
+      echo "I list the NAT Gateways in AWS for all or specified profiles"
+      echo "${PURPLE}Usage${GREEN}: natGateways${NC}"
+      echo "Pass through the <AWS Profiles> if you don't want to go through all profiles"
+      echo "${PURPLE}Usage${GREEN}: natGateways <PROFILE1> <PROFILE2> ...${NC}"
       ;;
     "ghistory")
       echo "I get the git history for you"
