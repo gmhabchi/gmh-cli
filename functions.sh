@@ -227,14 +227,22 @@ pstack () {
   NAME=$(basename "$PWD") 
   export PULUMI_SKIP_UPDATE_CHECK="true" 
   if [[ "$NAME" =~ ^(dabble-accounts|internal-accounts|root-account)$ ]]
+  # Main Stacks in the Cloud Repo
   then
-          NAME="" 
+          NAME=""
   elif [[ "$NAME" = ".deploy" ]]
+  # Stacks using the .deploy folder
   then
           NAME="$(basename "$(dirname "$PWD")")" 
           NAME="-$NAME"
+  elif [[ "$NAME" == "deploy" ]]
+  # Stacks using the package/deploy folder
+  then
+          NAME="$(basename "$(dirname "$(dirname "$PWD")")")" 
+          NAME="-$NAME"
   elif [[ "$NAME" == *_* ]]
   then
+  # Data stacks with suffixes
           SUFFIX="-${NAME#*_}"
           NAME="-$(basename "$(dirname "$PWD")")$SUFFIX"
   else
