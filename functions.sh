@@ -478,6 +478,41 @@ downloadVideo() {
   yt-dlp -f bestvideo+bestaudio --merge-output-format mp4 "$url"
 }
 
+aws_sso_session() {
+  local f exp exp_s now_s left hours mins
+
+  f=$(ls -t "$HOME"/.aws/sso/cache/*.json 2>/dev/null | head -1)
+  if [[ -z "$f" ]]; then
+    aws sso login --profile "$profile" || sleep 60
+    return 1
+  fi
+
+  exp=$(jq -r '.expiresAt' "$f" 2>/dev/null)
+  
+  # macOS/BSD date parsing - handle both formats AWS might use
+  if [[ "$exp" == *"Z" ]]; then
+    exp_s=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$exp" +%s 2>/dev/null)
+  else
+    exp_s=$(date -u -j -f "%Y-%m-%dT%H:%M:%S%Z" "$exp" +%s 2>/dev/null)
+  fi
+
+  now_s=$(date -u +%s)
+  left=$(( exp_s - now_s ))
+  (( left < 0 )) && left=0
+
+  # Convert to hours and minutes
+  hours=$(( left / 3600 ))
+  mins=$(( (left % 3600) / 60 ))
+
+  if (( hours > 0 )); then
+    echo "${hours} hours ${mins} mins"
+  elif (( mins > 0 )); then
+    echo "${mins} mins"
+  else
+    echo "expired"
+  fi
+}
+
 ghistory() {
   DAYS=${1:-1}
   DATE=$(date -v -"${DAYS}"d +'%Y-%m-%d')

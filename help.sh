@@ -137,6 +137,10 @@ ghelp() {
       echo "Pass through the <AWS Profiles> if you don't want to go through all profiles"
       echo "${PURPLE}Usage${GREEN}: natGateways <PROFILE1> <PROFILE2> ...${NC}"
       ;;
+    "aws_sso_session")
+      echo "I check the AWS SSO login session for current profile"
+      echo "${PURPLE}Usage${GREEN}: aws_sso_session${NC}"
+      ;;
     "ghistory")
       echo "I get the git history for you"
       echo "${PURPLE}Usage${GREEN}: ghistory${NC}"
