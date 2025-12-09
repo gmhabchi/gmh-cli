@@ -31,6 +31,7 @@ ghelp() {
     echo -e "${RED}podClean${NC}: Clean up pods in a Kubernetes cluster"
     echo -e "${RED}vmLogs${NC}: Get logs for a VM"
     echo -e "${RED}natGateways${NC}: List NAT Gateways in AWS"
+    echo -e "${RED}aws_sso_session${NC}: Check AWS SSO login session status"
     echo -e "${RED}ghistory${NC}: Get the git commit history"
     echo -e "${RED}html-live${NC}: Start a live server for HTML files"
     echo -e "${RED}downloadVideo${NC}: Download a video from a URL"
