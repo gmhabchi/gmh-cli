@@ -25,7 +25,6 @@ alogin() {
 
 # AWS Login for ghabchi
 glogin() {
-  # shellcheck disable=SC2034
   aws sso login --profile personal && export AWS_PROFILE=personal
 }
 
@@ -44,8 +43,8 @@ lnetwork() {
   arp -a
 }
 
+# Stop and remove Docker containers or kill Docker/OrbStack
 dockerKill() {
-  # Old Way commented out
   args=$1
   if [[ $args == 'main' ]]; then
     echo "Killing Docker/Orb"
@@ -78,10 +77,12 @@ dockerKill() {
 
 }
 
+# Stop OrbStack
 dockerStop() {
   orb stop
 }
 
+# Check if OrbStack is running, start if not
 dockerCheck() {
   if ! orb status &>/dev/null; then
     echo "Starting Orb"
@@ -90,6 +91,7 @@ dockerCheck() {
   orb &>/dev/null
 }
 
+# Update FathomDB permissions for a given environment
 fathomDB() {
   export PULUMI_SKIP_UPDATE_CHECK="true"
   environment=$1
@@ -132,8 +134,10 @@ airflow_pod_clean() {
   fi
 }
 
+# Generate a lowercase UUID and copy to clipboard
 alias PWgen="uuidgen | tr '[:upper:]' '[:lower:]' | pbcopy"
 
+# Pull latest master for all git repos in a directory
 git_update_dir() {
   directory=${1:-"."}
   for subdir in "$directory"/*/; do
@@ -149,6 +153,7 @@ git_update_dir() {
   done
 }
 
+# Search AWS Cognito for users by phone number
 cognito_search() {
   PHONE_NUMBER="$1"
 
@@ -208,6 +213,7 @@ cognito_search() {
   fi
 }
 
+# Get and decrypt Kubernetes secrets
 kubectl_secrets() {
   NAME=$1
   ENVIRONMENT=$2
@@ -217,13 +223,14 @@ kubectl_secrets() {
   elif [ -n "$NAME" ]; then
     kubectl get secret "$NAME" -o jsonpath='{.data}' | jq 'to_entries | map("\(.key): \(.value | @base64d)") | .[]'
   else
-    error "Missing NAME=8="
+    error "Missing NAME"
     echo "${GREEN}NAME:${NC} ${NAME}"
   fi
 }
 
+# Change Pulumi stack based on current directory
 pstack () {
-  ENVIRONMENT=$1 
+  ENVIRONMENT=$1
   NAME=$(basename "$PWD") 
   export PULUMI_SKIP_UPDATE_CHECK="true" 
   if [[ "$NAME" =~ ^(dabble-accounts|internal-accounts|root-account)$ ]]
@@ -258,6 +265,7 @@ pstack () {
   fi
 }
 
+# Change Pulumi login environment (dabble, internal, root)
 penv() {
   ENVIRONMENT=$1
   export PULUMI_SKIP_UPDATE_CHECK="true"
@@ -279,6 +287,7 @@ penv() {
   fi
 }
 
+# Show and decrypt Pulumi secrets for current or specified stack
 psecrets() {
   ENVIRONMENT=$1
   if [ -n "$ENVIRONMENT" ]; then
@@ -290,6 +299,7 @@ psecrets() {
   pulumi config --show-secrets
 }
 
+# Count nodes in a Kubernetes cluster by purpose
 nodeCount() {
   local environment=$1
   if [ -n "$environment" ]; then
@@ -300,89 +310,103 @@ nodeCount() {
   else
     NODES=$(kubectl get nodes -o json)
     COUNT=$(echo "$NODES" | jq -r '.items | length')
-    CURRENT_CONTEXT=$(cat ~/.kube/config | grep -E "^\s*current-context:" | awk '{print $2}')
+    CURRENT_CONTEXT=$(grep -E "^\s*current-context:" ~/.kube/config | awk '{print $2}')
     echo "${PURPLE}Current Context - ${GREEN} ${CURRENT_CONTEXT}:${NC} $COUNT"
     echo $NODES | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
   fi
 }
 
+# Check for non-running/non-completed pods across environments
+# Usage: podCheck [environment...]
 podCheck() {
   environments=($(envCheck "$@"))
-  if [ "${#environments[@]}" -eq 1 ]; then
-    environments=("$environments")
-  fi
-
   for environment in "${environments[@]}"; do
-    echo "${PURPLE}Checking $environment...${NC}"
-    errors=$(kubectl get pods --context "$environment/main" --no-headers -A | grep -v "Running\|Completed")
-    if [[ -z $errors ]]; then
-      echo "No errors"
+    echo "${PURPLE}Checking pods in $environment...${NC}"
+    local result=$(kubectl get pods --context "$environment/main" --no-headers -A 2>/dev/null | grep -v "Running\|Completed")
+    if [[ -z "$result" ]]; then
+      echo "${GREEN}No problem pods found${NC}"
     else
-      echo "$errors"
-    fi
-  done
-}
-
-jobCheck() {
-  environments=($(envCheck "$@"))
-  if [ "${#environments[@]}" -eq 1 ]; then
-    environments=("$environments")
-  fi
-
-  for environment in "${environments[@]}"; do
-    echo "${PURPLE}Checking $environment...${NC}"
-    jobs=$(kubectl get jobs --context "$environment/main" --no-headers -A | grep -v "1/1" | grep -v "Running")
-    if [[ -n "$jobs" && "$jobs" != "No resources found" ]]; then
-      echo "$jobs"
+      echo "$result"
     fi
     echo ""
   done
 }
 
-vmLogs() {
-  local pod=$1
-  # shellcheck disable=SC2317
-  if [ -n "$pod" ]; then
-    kubectl logs "$pod" -n monitoring -c vmagent
-  else
-    kubectl logs "$(kubectl get pods -n monitoring -o json | jq -r '.items[] | select(.metadata.labels."app.kubernetes.io/name" == "vmagent") | .metadata.name')" -n monitoring -c vmagent
-  fi
+# Check for failed jobs across environments
+# Usage: jobCheck [environment...]
+jobCheck() {
+  environments=($(envCheck "$@"))
+  for environment in "${environments[@]}"; do
+    echo "${PURPLE}Checking jobs in $environment...${NC}"
+    local result=$(kubectl get jobs --context "$environment/main" --no-headers -A 2>/dev/null | grep -v "1/1")
+    if [[ -z "$result" ]]; then
+      echo "${GREEN}No failed jobs found${NC}"
+    else
+      echo "$result"
+    fi
+    echo ""
+  done
 }
 
-getUnhealthyPods() {
-  local environment=$1
-  local namespace=$2
-
-}
-
+# Delete failed/errored pods across environments
+# Usage: podClean [environment...] or podClean <environment> <namespace>
 podClean() {
-  local environment=$1
-  local namespace=$2
-  if [ -n "$environment" ] && [ -n "$namespace" ]; then
-    # shellcheck disable=SC2046
-    kubectl delete pod $(kubectl get pods -o json -n "$namespace" --context "$environment/main" | jq -r '.items[] | select(.status.phase == "Failed" or .status.phase == "Error") | .metadata.name') -n "$namespace" --context "$environment/main"
-  elif [ -n "$environment" ]; then
-    # shellcheck disable=SC2046
-    kubectl delete pod $(kubectl get pods -o json --context "$environment/main" | jq -r '.items[] | select(.status.phase == "Failed" or .status.phase == "Error") | .metadata.name') --context "$environment/main"
+  local namespace=""
+  # Check if second arg looks like a namespace (not an environment shortcut)
+  if [[ -n "$2" && ! "$2" =~ ^(stg|prod|stg-us|stg-uk|prod-us|prod-uk)$ ]]; then
+    namespace="$2"
+    environments=("$1")
   else
-    # shellcheck disable=SC2046
-    kubectl delete pod $(kubectl get pods -o json | jq -r '.items[] | select(.status.phase == "Failed" or .status.phase == "Error") | .metadata.name')
+    environments=($(envCheck "$@"))
   fi
+
+  local jqFilter='.items[] | select(.status.phase == "Failed" or .status.phase == "Error") | .metadata.name'
+
+  for environment in "${environments[@]}"; do
+    echo "${PURPLE}Cleaning failed pods in $environment...${NC}"
+    local nsFlag="-A"
+    [[ -n "$namespace" ]] && nsFlag="-n $namespace"
+
+    local pods=$(kubectl get pods -o json $nsFlag --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
+    if [[ -z "$pods" ]]; then
+      echo "${GREEN}No failed pods to clean${NC}"
+    else
+      echo "$pods" | xargs -r kubectl delete pod $nsFlag --context "$environment/main"
+    fi
+    echo ""
+  done
 }
 
+# Delete failed jobs across environments
+# Usage: jobClean [environment...] or jobClean <environment> <namespace>
 jobClean() {
-  local environment=$1
-  local namespace=$2
-  local jqFilter='.items[] | select(.status.conditions and (.status.conditions[]?.type | test("Fail"))) | .metadata.name'
-  if [ -n "$environment" ] && [ -n "$namespace" ]; then
-    kubectl delete job $(kubectl get jobs -o json -n "$namespace" --context "$environment/main" | jq -r "$jqFilter") -n "$namespace" --context "$environment/main"
-  elif [ -n "$environment" ]; then
-    kubectl delete job $(kubectl get jobs -o json --context "$environment/main" | jq -r "$jqFilter")
+  local namespace=""
+  # Check if second arg looks like a namespace (not an environment shortcut)
+  if [[ -n "$2" && ! "$2" =~ ^(stg|prod|stg-us|stg-uk|prod-us|prod-uk)$ ]]; then
+    namespace="$2"
+    environments=("$1")
   else
-    kubectl delete job $(kubectl get jobs -o json | jq -r "$jqFilter")
+    environments=($(envCheck "$@"))
   fi
+
+  local jqFilter='.items[] | select(.status.conditions and (.status.conditions[]?.type | test("Fail"))) | .metadata.name'
+
+  for environment in "${environments[@]}"; do
+    echo "${PURPLE}Cleaning failed jobs in $environment...${NC}"
+    local nsFlag="-A"
+    [[ -n "$namespace" ]] && nsFlag="-n $namespace"
+
+    local jobs=$(kubectl get jobs -o json $nsFlag --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
+    if [[ -z "$jobs" ]]; then
+      echo "${GREEN}No failed jobs to clean${NC}"
+    else
+      echo "$jobs" | xargs -r kubectl delete job $nsFlag --context "$environment/main"
+    fi
+    echo ""
+  done
 }
 
+# Get VictoriaMetrics agent logs
 vmLogs() {
   local follow=$1
   if [[ "$follow" == "follow" || "$follow" == "f" ]]; then
@@ -392,6 +416,7 @@ vmLogs() {
   fi
 }
 
+# Create a one-off job from a CronJob for testing
 logsCronjob() {
   local job=$1
   if [ -n "$job" ]; then
@@ -402,6 +427,7 @@ logsCronjob() {
   fi
 }
 
+# Check VictoriaMetrics targets for failed scrapes
 vmCheck() {
   local urls=("$@")
   for url in "${urls[@]}"; do
@@ -422,6 +448,7 @@ vmCheck() {
   done
 }
 
+# List NAT Gateways with public IPs across AWS profiles
 natGateways() {
   local PROFILES=("$@")
   if [ ${#PROFILES[@]} -eq 0 ]; then
@@ -458,12 +485,14 @@ natGateways() {
       '
 }
 
+# Start a local HTTP server for serving HTML files
 html-live() {
   local port="${1:-8080}"
   local directory="${2:-.}"
   python3 -m http.server "$port" --directory "$directory"
 }
 
+# Download video from URL using yt-dlp
 downloadVideo() {
   local url="$1"
   if ! command -v yt-dlp &>/dev/null; then
@@ -471,19 +500,20 @@ downloadVideo() {
     return 1
   fi
   if [[ -z "$url" ]]; then
-    echo "Usage: download_video <URL>"
+    echo "Usage: downloadVideo <URL>"
     return 1
   fi
 
   yt-dlp -f bestvideo+bestaudio --merge-output-format mp4 "$url"
 }
 
+# Check AWS SSO session time remaining
 aws_sso_session() {
   local f exp exp_s now_s left hours mins
 
   f=$(ls -t "$HOME"/.aws/sso/cache/*.json 2>/dev/null | head -1)
   if [[ -z "$f" ]]; then
-    aws sso login --profile "$profile" || sleep 60
+    aws sso login || sleep 60
     return 1
   fi
 
@@ -513,6 +543,7 @@ aws_sso_session() {
   fi
 }
 
+# Show shell history from N days ago
 ghistory() {
   DAYS=${1:-1}
   DATE=$(date -v -"${DAYS}"d +'%Y-%m-%d')
@@ -533,6 +564,7 @@ ghistory() {
   }' ~/.zsh_history
 }
 
+# Lock the Mac screen
 glock() {
   host=$(hostname)
   echo "Locking this Mac - ${host}"
@@ -540,6 +572,7 @@ glock() {
   osascript -e 'tell application "System Events" to keystroke "q" using {control down, command down}'
 }
 
+# Set screen brightness to 100%
 gbright() {
   info "Setting brightness to 100%"
   for i in {1..23}; do
