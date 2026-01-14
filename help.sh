@@ -201,6 +201,15 @@ ghelp() {
     "dabble")
       figlet 👌abble
       ;;
+    "airflow_pod_clean")
+      echo "I list or clean Airflow failed pods (legacy - consider using podClean)"
+      echo "${PURPLE}Usage${GREEN}: airflow_pod_clean${NC} - List pods in staging airflow"
+      echo "${PURPLE}Usage${GREEN}: airflow_pod_clean list <ENV>${NC} - List pods"
+      echo "${PURPLE}Usage${GREEN}: airflow_pod_clean delete <ENV>${NC} - Delete failed pods"
+      echo "${PURPLE}Usage${GREEN}: airflow_pod_clean help${NC} - Show help"
+      echo ""
+      echo "${PURPLE}Recommended alternative${GREEN}: podClean <ENV>-internal airflow${NC}"
+      ;;
     esac
   fi
 }

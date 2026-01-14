@@ -4,7 +4,7 @@
 # set -x
 
 location=$(dirname "$0")
-source $location/shared.sh
+source "$location/shared.sh"
 
 # Who are you?
 whoareyou() {
@@ -45,28 +45,32 @@ lnetwork() {
 
 # Stop and remove Docker containers or kill Docker/OrbStack
 dockerKill() {
-  args=$1
+  local args=$1
   if [[ $args == 'main' ]]; then
     echo "Killing Docker/Orb"
     # killall Docker
     killall OrbStack
   elif [[ $args == 'all' ]]; then
-    running=$(docker ps -q)
+    echo "Running containers:"
     docker ps --format '{{.Names}}'
-    for container in "${running[@]}"; do
-      if [ -n "$container" ]; then
-        echo "Stopping and Removing:"
-        docker stop "$container"
-        docker rm "$container"
-      fi
-    done
+
+    # Stop and remove running containers
+    local running
+    running=$(docker ps -q)
+    if [[ -n "$running" ]]; then
+      echo "Stopping and Removing:"
+      echo "$running" | xargs -r docker stop
+      echo "$running" | xargs -r docker rm
+    fi
+
+    # Remove exited containers
+    local exited
     exited=$(docker ps -a -q -f status=exited)
-    for container in "${exited[@]}"; do
-      if [ -n "$container" ]; then
-        echo "Removing:"
-        docker rm "$container"
-      fi
-    done
+    if [[ -n "$exited" ]]; then
+      echo "Removing exited containers:"
+      echo "$exited" | xargs -r docker rm
+    fi
+
     echo "Killing Docker"
     killall Docker
   else
@@ -74,7 +78,6 @@ dockerKill() {
     echo "${PURPLE}Please try:"
     echo "${GREEN}    dockerKill all|main${NC}"
   fi
-
 }
 
 # Stop OrbStack
@@ -118,13 +121,13 @@ kuttle_init() {
   sshuttle -r "$(kubectl get pod -l app.kubernetes.io/name=kuttle -o jsonpath="{.items[0].metadata.name}" -n default)" -e kuttle 10.0.0.0/8
 }
 
-# Airflow pod clean
+# Airflow pod clean (legacy - consider using: podClean <env>-internal airflow)
 airflow_pod_clean() {
-  kube_action=${1:-"list"}
-  kube_env=${2:-"staging"}
-  if [ "$kube_action" == "delete" ]; then
-    kubectl --context "$kube_env-internal/main" -n airflow get pods --field-selector 'status.phase=Failed' -o name | xargs kubectl --context "$kube_env-internal/main" -n airflow delete
-  elif [ "$kube_action" == "help" ]; then
+  local kube_action=${1:-"list"}
+  local kube_env=${2:-"staging"}
+  if [[ "$kube_action" == "delete" ]]; then
+    kubectl --context "$kube_env-internal/main" -n airflow get pods --field-selector 'status.phase=Failed' -o name | xargs -r kubectl --context "$kube_env-internal/main" -n airflow delete
+  elif [[ "$kube_action" == "help" ]]; then
     figlet 👌abble
     echo "airflow_pod_clean <action> <env>"
     echo "  action: list | delete"
@@ -303,16 +306,21 @@ psecrets() {
 nodeCount() {
   local environment=$1
   if [ -n "$environment" ]; then
-    NODES=$(kubectl get nodes --context "$environment/main" -o json)
-    COUNT=$(echo "$NODES" | jq -r '.items | length')
-    echo "${GREEN}$environment:${NC} $COUNT"
-    echo $NODES | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
+    local nodes
+    nodes=$(kubectl get nodes --context "$environment/main" -o json)
+    local count
+    count=$(echo "$nodes" | jq -r '.items | length')
+    echo "${GREEN}$environment:${NC} $count"
+    echo "$nodes" | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
   else
-    NODES=$(kubectl get nodes -o json)
-    COUNT=$(echo "$NODES" | jq -r '.items | length')
-    CURRENT_CONTEXT=$(grep -E "^\s*current-context:" ~/.kube/config | awk '{print $2}')
-    echo "${PURPLE}Current Context - ${GREEN} ${CURRENT_CONTEXT}:${NC} $COUNT"
-    echo $NODES | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
+    local nodes
+    nodes=$(kubectl get nodes -o json)
+    local count
+    count=$(echo "$nodes" | jq -r '.items | length')
+    local current_context
+    current_context=$(kubectl config current-context 2>/dev/null || echo "unknown")
+    echo "${PURPLE}Current Context - ${GREEN} ${current_context}:${NC} $count"
+    echo "$nodes" | jq -r '.items[] | .metadata.labels.purpose' | sort | uniq -c | sort -nr
   fi
 }
 
@@ -360,18 +368,37 @@ podClean() {
     environments=($(envCheck "$@"))
   fi
 
-  local jqFilter='.items[] | select(.status.phase == "Failed" or .status.phase == "Error") | .metadata.name'
-
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Cleaning failed pods in $environment...${NC}"
-    local nsFlag="-A"
-    [[ -n "$namespace" ]] && nsFlag="-n $namespace"
 
-    local pods=$(kubectl get pods -o json $nsFlag --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
-    if [[ -z "$pods" ]]; then
-      echo "${GREEN}No failed pods to clean${NC}"
+    if [[ -n "$namespace" ]]; then
+      # With namespace: filter by phase or init container errors, output just name
+      local jqFilter='.items[] | select(
+        .status.phase == "Failed" or
+        .status.phase == "Error" or
+        (.status.initContainerStatuses[]? | .state.waiting.reason == "Error" or .state.terminated.reason == "Error")
+      ) | .metadata.name'
+      local pods=$(kubectl get pods -o json -n "$namespace" --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
+      if [[ -z "$pods" ]]; then
+        echo "${GREEN}No failed pods to clean${NC}"
+      else
+        echo "$pods" | xargs -r kubectl delete pod -n "$namespace" --context "$environment/main"
+      fi
     else
-      echo "$pods" | xargs -r kubectl delete pod $nsFlag --context "$environment/main"
+      # Without namespace: need namespace/name for deletion across all namespaces
+      local jqFilter='.items[] | select(
+        .status.phase == "Failed" or
+        .status.phase == "Error" or
+        (.status.initContainerStatuses[]? | .state.waiting.reason == "Error" or .state.terminated.reason == "Error")
+      ) | "\(.metadata.namespace)/\(.metadata.name)"'
+      local pods=$(kubectl get pods -o json -A --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
+      if [[ -z "$pods" ]]; then
+        echo "${GREEN}No failed pods to clean${NC}"
+      else
+        echo "$pods" | while IFS='/' read -r ns name; do
+          kubectl delete pod "$name" -n "$ns" --context "$environment/main"
+        done
+      fi
     fi
     echo ""
   done
@@ -389,18 +416,27 @@ jobClean() {
     environments=($(envCheck "$@"))
   fi
 
-  local jqFilter='.items[] | select(.status.conditions and (.status.conditions[]?.type | test("Fail"))) | .metadata.name'
-
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Cleaning failed jobs in $environment...${NC}"
-    local nsFlag="-A"
-    [[ -n "$namespace" ]] && nsFlag="-n $namespace"
 
-    local jobs=$(kubectl get jobs -o json $nsFlag --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
-    if [[ -z "$jobs" ]]; then
-      echo "${GREEN}No failed jobs to clean${NC}"
+    if [[ -n "$namespace" ]]; then
+      local jqFilter='.items[] | select(.status.conditions and (.status.conditions[]?.type | test("Fail"))) | .metadata.name'
+      local jobs=$(kubectl get jobs -o json -n "$namespace" --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
+      if [[ -z "$jobs" ]]; then
+        echo "${GREEN}No failed jobs to clean${NC}"
+      else
+        echo "$jobs" | xargs -r kubectl delete job -n "$namespace" --context "$environment/main"
+      fi
     else
-      echo "$jobs" | xargs -r kubectl delete job $nsFlag --context "$environment/main"
+      local jqFilter='.items[] | select(.status.conditions and (.status.conditions[]?.type | test("Fail"))) | "\(.metadata.namespace)/\(.metadata.name)"'
+      local jobs=$(kubectl get jobs -o json -A --context "$environment/main" 2>/dev/null | jq -r "$jqFilter")
+      if [[ -z "$jobs" ]]; then
+        echo "${GREEN}No failed jobs to clean${NC}"
+      else
+        echo "$jobs" | while IFS='/' read -r ns name; do
+          kubectl delete job "$name" -n "$ns" --context "$environment/main"
+        done
+      fi
     fi
     echo ""
   done
