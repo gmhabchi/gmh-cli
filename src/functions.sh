@@ -3,8 +3,14 @@
 # debug
 # set -x
 
-location=$(dirname "$0")
-source "$location/shared.sh"
+# Source shared.sh from the same directory as this script
+# Use BASH_SOURCE for bash, ${(%):-%x} for zsh
+if [ -n "$ZSH_VERSION" ]; then
+  script_dir=$(dirname "${(%):-%x}")
+else
+  script_dir=$(dirname "${BASH_SOURCE[0]}")
+fi
+source "$script_dir/shared.sh"
 
 # Who are you?
 whoareyou() {
@@ -35,7 +41,35 @@ plogin() {
 
 #Delete Pulumi Lock file from S3
 pdelete() {
-  aws s3 rm "$1"
+  local s3_path="$1"
+
+  # Validate input
+  if [ -z "$s3_path" ]; then
+    error "Missing S3 path"
+    echo "${PURPLE}Usage${GREEN}: pdelete <S3_PATH>${NC}"
+    return 1
+  fi
+
+  # Check that path starts with s3:// and ends with .json
+  if [[ ! "$s3_path" =~ ^s3:// ]]; then
+    error "S3 path must start with s3://"
+    return 1
+  fi
+
+  if [[ ! "$s3_path" =~ \.json$ ]]; then
+    error "S3 path must end with .json"
+    return 1
+  fi
+
+  # Show what will be deleted and confirm
+  echo "${PURPLE}About to delete:${NC} $s3_path"
+  read -p "Are you sure? (y/N): " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    aws s3 rm "$s3_path"
+  else
+    echo "${GREEN}Cancelled${NC}"
+  fi
 }
 
 #List things on the Network
@@ -137,8 +171,47 @@ airflow_pod_clean() {
   fi
 }
 
-# Generate a lowercase UUID and copy to clipboard
-alias PWgen="uuidgen | tr '[:upper:]' '[:lower:]' | pbcopy"
+# Generate a secure password and copy to clipboard
+unalias PWgen 2>/dev/null || true
+PWgen() {
+  local length="${1:-20}"
+  local mode="${2:-complex}"
+  local show_password=false
+
+  # Check for --show flag in any position
+  for arg in "$@"; do
+    if [[ "$arg" == "--show" ]]; then
+      show_password=true
+    fi
+  done
+
+  if [[ "$1" == "simple" ]]; then
+    mode="simple"
+    length=20
+  elif [[ "$2" == "simple" ]]; then
+    mode="simple"
+  fi
+
+  local password
+
+  if [[ "$mode" == "simple" ]]; then
+    # Simple mode: only letters and digits
+    password=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "$length")
+    echo "${GREEN}Generated simple password (letters + digits)${NC}"
+  else
+    # Complex mode: letters, digits, and symbols (default)
+    password=$(LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*()_+-=[]{}|;:,.<>?' < /dev/urandom | head -c "$length")
+    echo "${GREEN}Generated complex password (letters + digits + symbols)${NC}"
+  fi
+
+  echo "$password" | pbcopy
+
+  if [[ "$show_password" == true ]]; then
+    echo "${PURPLE}$password${NC}"
+  fi
+
+  echo "${GREEN}✓ Password copied to clipboard!${NC}"
+}
 
 # Pull latest master for all git repos in a directory
 git_update_dir() {
@@ -221,6 +294,16 @@ kubectl_secrets() {
   NAME=$1
   ENVIRONMENT=$2
   NAMESPACE=$3
+
+  # Security warning
+  echo "${RED}⚠️  WARNING: This will display sensitive secrets in the terminal!${NC}"
+  read -p "Continue? (y/N): " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "${GREEN}Cancelled${NC}"
+    return 0
+  fi
+
   if [ -n "$NAME" ] && [ -n "$ENVIRONMENT" ] && [ -n "$NAMESPACE" ]; then
     kubectl get secret "$NAME" -o jsonpath='{.data}' --context "$ENVIRONMENT/main" -n "$NAMESPACE" | jq 'to_entries | map("\(.key): \(.value | @base64d)") | .[]'
   elif [ -n "$NAME" ]; then
@@ -468,15 +551,27 @@ vmCheck() {
   local urls=("$@")
   for url in "${urls[@]}"; do
     url=${url%,}
+
+    # Validate URL format (hostname:port)
+    if [[ ! "$url" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
+      error "Invalid URL format: $url (expected format: hostname:port)"
+      continue
+    fi
+
     full_url="http://${url}/targets?show_only_unhealthy=true"
     echo "Checking $full_url"
 
-    errors=$(curl -s "$full_url" | grep "scrapes_failed=[1-9]" | sed -E -n '/error=[^,]+/ s/.*endpoint=([^,]+),.*error=([^,]+).*/\1/p')
+    errors=$(curl -s --proto '=http,https' "$full_url" | grep "scrapes_failed=[1-9]" | sed -E -n '/error=[^,]+/ s/.*endpoint=([^,]+),.*error=([^,]+).*/\1/p')
 
     if [[ -n "$errors" ]]; then
       while IFS= read -r endpoint; do
-        echo "Opening $endpoint"
-        open "$endpoint" 2>/dev/null
+        # Only open http/https URLs, not file:// or other protocols
+        if [[ "$endpoint" =~ ^https?:// ]]; then
+          echo "Opening $endpoint"
+          open "$endpoint" 2>/dev/null
+        else
+          echo "${RED}Skipping invalid endpoint:${NC} $endpoint"
+        fi
       done <<<"$errors"
     else
       echo "No errors found for $url"
@@ -618,4 +713,106 @@ gbright() {
         end tell
 EOD
   done
+}
+
+# Check and install dependencies
+ginstall() {
+  echo "${GREEN}GMH-CLI Dependency Installer${NC}"
+  echo ""
+
+  # Check if Homebrew is installed
+  if ! command -v brew &> /dev/null; then
+    echo "${RED}Homebrew is not installed.${NC}"
+    echo "Homebrew is required to install dependencies."
+    echo "Install it from: https://brew.sh"
+    return 1
+  fi
+
+  # Required dependencies
+  local required_deps=(
+    "jq:jq"
+    "aws:awscli"
+    "pulumi:pulumi"
+    "docker:docker"
+    "kubectl:kubectl"
+    "pnpm:pnpm"
+  )
+
+  # Optional dependencies
+  local optional_deps=(
+    "kubectx:kubectx"
+    "figlet:figlet"
+    "yt-dlp:yt-dlp"
+  )
+
+  echo "${PURPLE}=== Checking Required Dependencies ===${NC}"
+  local missing_required=()
+
+  for dep in "${required_deps[@]}"; do
+    local cmd="${dep%%:*}"
+    local pkg="${dep##*:}"
+
+    if command -v "$cmd" &> /dev/null; then
+      echo "${GREEN}✓${NC} $cmd is installed"
+    else
+      echo "${RED}✗${NC} $cmd is missing"
+      missing_required+=("$pkg")
+    fi
+  done
+
+  echo ""
+  echo "${PURPLE}=== Checking Optional Dependencies ===${NC}"
+  local missing_optional=()
+
+  for dep in "${optional_deps[@]}"; do
+    local cmd="${dep%%:*}"
+    local pkg="${dep##*:}"
+
+    if command -v "$cmd" &> /dev/null; then
+      echo "${GREEN}✓${NC} $cmd is installed"
+    else
+      echo "${RED}✗${NC} $cmd is missing (optional)"
+      missing_optional+=("$pkg")
+    fi
+  done
+
+  echo ""
+
+  # Install missing required dependencies
+  if [ ${#missing_required[@]} -gt 0 ]; then
+    echo "${PURPLE}=== Installing Required Dependencies ===${NC}"
+    for pkg in "${missing_required[@]}"; do
+      echo "${GREEN}Installing $pkg...${NC}"
+      brew install "$pkg"
+    done
+  else
+    echo "${GREEN}All required dependencies are installed!${NC}"
+  fi
+
+  echo ""
+
+  # Prompt for optional dependencies
+  if [ ${#missing_optional[@]} -gt 0 ]; then
+    echo "${PURPLE}=== Optional Dependencies ===${NC}"
+    echo "The following optional dependencies are missing:"
+    for pkg in "${missing_optional[@]}"; do
+      echo "  - $pkg"
+    done
+    echo ""
+    read -p "Would you like to install optional dependencies? (y/n): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      for pkg in "${missing_optional[@]}"; do
+        echo "${GREEN}Installing $pkg...${NC}"
+        brew install "$pkg"
+      done
+    else
+      echo "Skipping optional dependencies."
+    fi
+  else
+    echo "${GREEN}All optional dependencies are installed!${NC}"
+  fi
+
+  echo ""
+  echo "${GREEN}Installation complete!${NC}"
 }

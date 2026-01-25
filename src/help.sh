@@ -46,9 +46,10 @@ ghelp() {
     echo -e "  ${RED}ghistory${NC}: Show shell history from N days ago"
     echo -e "  ${RED}glock${NC}: Lock the Mac screen"
     echo -e "  ${RED}gbright${NC}: Set screen brightness to 100%"
+    echo -e "  ${RED}ginstall${NC}: Check and install required/optional dependencies"
     echo -e "  ${RED}html-live${NC}: Start a local HTTP server"
     echo -e "  ${RED}downloadVideo${NC}: Download video using yt-dlp"
-    echo -e "  ${RED}PWgen${NC}: Generate UUID and copy to clipboard"
+    echo -e "  ${RED}PWgen${NC}: Generate secure password and copy to clipboard"
     echo -e "  ${RED}whoareyou${NC}: Display current user identity"
     echo -e "  ${RED}git_update_dir${NC}: Pull latest master for all repos in directory"
     echo -e "  ${RED}lnetwork${NC}: List network devices using ARP"
@@ -71,8 +72,13 @@ ghelp() {
       git -h
       ;;
     "pdelete")
-      echo "aws -h"
-      aws -h
+      echo "I delete Pulumi lock files from S3"
+      echo "${PURPLE}Usage${GREEN}: pdelete <S3_PATH>${NC}"
+      echo ""
+      echo "${GREEN}Security:${NC} Path must start with s3:// and end with .json"
+      echo "${GREEN}Example:${NC} pdelete s3://<PULUMI_BUCKET>/.pulumi/locks/<STACK>/<LOCK_FILE>.json"
+      echo ""
+      echo "Confirmation prompt will be shown before deletion"
       ;;
     "lnetwork")
       echo "arp -h"
@@ -191,6 +197,30 @@ ghelp() {
     "glock")
       echo "I lock the screen"
       echo "${PURPLE}Usage${GREEN}: glock${NC}"
+      ;;
+    "ginstall")
+      echo "I check and install required and optional dependencies"
+      echo "${PURPLE}Usage${GREEN}: ginstall${NC}"
+      echo ""
+      echo "This will:"
+      echo "  1. Check if all required dependencies are installed"
+      echo "  2. Install any missing required dependencies"
+      echo "  3. Prompt to install optional dependencies"
+      echo ""
+      echo "${GREEN}Required:${NC} jq, aws-cli, pulumi, docker, kubectl, pnpm"
+      echo "${GREEN}Optional:${NC} kubectx, figlet, yt-dlp"
+      ;;
+    "PWgen")
+      echo "I generate a secure password and copy it to the clipboard"
+      echo "${PURPLE}Usage${GREEN}: PWgen${NC} - Generate 20-char complex password (default)"
+      echo "${PURPLE}Usage${GREEN}: PWgen <LENGTH>${NC} - Generate complex password with custom length"
+      echo "${PURPLE}Usage${GREEN}: PWgen simple${NC} - Generate 20-char simple password (letters + digits only)"
+      echo "${PURPLE}Usage${GREEN}: PWgen <LENGTH> simple${NC} - Generate simple password with custom length"
+      echo "${PURPLE}Usage${GREEN}: PWgen --show${NC} - Display password in terminal (not recommended)"
+      echo ""
+      echo "${GREEN}Complex mode (default):${NC} Letters + Digits + Symbols"
+      echo "${GREEN}Simple mode:${NC} Letters + Digits only"
+      echo "${GREEN}Security:${NC} Password is NOT displayed by default (use --show to display)"
       ;;
     "whoareyou")
       echo "Ohh I know 🤔"
