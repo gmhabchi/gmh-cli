@@ -63,7 +63,12 @@ pdelete() {
 
   # Show what will be deleted and confirm
   echo "${PURPLE}About to delete:${NC} $s3_path"
-  read -p "Are you sure? (y/N): " -n 1 -r
+  printf "Are you sure? (y/N): "
+  if [ -n "$ZSH_VERSION" ]; then
+    read -r -k 1 REPLY
+  else
+    read -r -n 1 REPLY
+  fi
   echo
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     aws s3 rm "$s3_path"
@@ -297,7 +302,12 @@ kubectl_secrets() {
 
   # Security warning
   echo "${RED}⚠️  WARNING: This will display sensitive secrets in the terminal!${NC}"
-  read -p "Continue? (y/N): " -n 1 -r
+  printf "Continue? (y/N): "
+  if [ -n "$ZSH_VERSION" ]; then
+    read -r -k 1 REPLY
+  else
+    read -r -n 1 REPLY
+  fi
   echo
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "${GREEN}Cancelled${NC}"
@@ -799,7 +809,12 @@ ginstall() {
       echo "  - $pkg"
     done
     echo ""
-    read -p "Would you like to install optional dependencies? (y/n): " -n 1 -r
+    printf "Would you like to install optional dependencies? (y/n): "
+    if [ -n "$ZSH_VERSION" ]; then
+      read -r -k 1 REPLY
+    else
+      read -r -n 1 REPLY
+    fi
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       for pkg in "${missing_optional[@]}"; do
