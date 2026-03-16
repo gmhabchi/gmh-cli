@@ -61,6 +61,20 @@ production-internal-uk
 # Pulumi environments
 _gmh_pulumi_envs="dabble internal root"
 
+# Pulumi stack environments
+_gmh_pulumi_stack_envs="
+staging
+staging-us
+staging-uk
+staging-use2
+staging-euw2
+production
+production-us
+production-uk
+production-use2
+production-euw2
+"
+
 # dockerKill completion
 _dockerKill_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
@@ -118,12 +132,14 @@ _penv_complete() {
 
 # pstack completion (environments)
 _pstack_complete() {
-    _env_complete
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=($(compgen -W "$_gmh_pulumi_stack_envs" -- "$cur"))
 }
 
 # psecrets completion
 _psecrets_complete() {
-    _env_complete
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=($(compgen -W "$_gmh_pulumi_stack_envs" -- "$cur"))
 }
 
 # cognito_search completion

@@ -22,6 +22,12 @@ _gmh_envs=(
 # Pulumi environments
 _gmh_pulumi_envs=(dabble internal root)
 
+# Pulumi stack environments
+_gmh_pulumi_stack_envs=(
+  staging staging-us staging-uk staging-use2 staging-euw2
+  production production-us production-uk production-use2 production-euw2
+)
+
 # dockerKill completion
 _dockerKill_zsh() {
   _arguments '1:action:(all main)'
@@ -76,12 +82,12 @@ _penv_zsh() {
 
 # pstack completion
 _pstack_zsh() {
-  _gmh_env_zsh
+  _values 'environment' $_gmh_pulumi_stack_envs
 }
 
 # psecrets completion
 _psecrets_zsh() {
-  _gmh_env_zsh
+  _values 'environment' $_gmh_pulumi_stack_envs
 }
 
 # cognito_search completion
