@@ -57,7 +57,7 @@ Tab completion is automatically enabled for both **bash** and **zsh**. The appro
 
 - **Function names**: Type partial function name and press `Tab`
 - **Environments**: Full environment names (no short aliases)
-  - External: `staging`, `staging-us`, `staging-uk`, `production`, `production-us`, `production-uk`
+  - External: `staging`, `staging-us`, `staging-uk`, `staging-use2`, `staging-euw2`, `production`, `production-us`, `production-uk`, `production-use2`, `production-euw2`
   - Internal: `staging-internal`, `staging-internal-us`, `staging-internal-uk`, `production-internal`, `production-internal-us`, `production-internal-uk`
 - **Arguments**: Context-aware completion for namespaces, actions, and more
 
