@@ -418,12 +418,22 @@ nodeCount() {
 }
 
 # Check for non-running/non-completed pods across environments
-# Usage: podCheck [environment...]
+# Usage: podCheck [-n namespace] [environment...]
 podCheck() {
-  environments=($(envCheck "$@"))
+  local namespace=""
+  local env_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n) namespace="$2"; shift 2 ;;
+      *)  env_args+=("$1"); shift ;;
+    esac
+  done
+  local ns_flag="-A"
+  [[ -n "$namespace" ]] && ns_flag="-n $namespace"
+  environments=($(envCheck "${env_args[@]}"))
   for environment in "${environments[@]}"; do
-    echo "${PURPLE}Checking pods in $environment...${NC}"
-    local result=$(kubectl get pods --context "$environment/main" --no-headers -A 2>/dev/null | grep -v "Running\|Completed")
+    echo "${PURPLE}Checking pods in $environment${namespace:+ ($namespace)}...${NC}"
+    local result=$(kubectl get pods --context "$environment/main" --no-headers $ns_flag 2>/dev/null | grep -v "Running\|Completed")
     if [[ -z "$result" ]]; then
       echo "${GREEN}No problem pods found${NC}"
     else
@@ -434,12 +444,22 @@ podCheck() {
 }
 
 # Check for failed jobs across environments
-# Usage: jobCheck [environment...]
+# Usage: jobCheck [-n namespace] [environment...]
 jobCheck() {
-  environments=($(envCheck "$@"))
+  local namespace=""
+  local env_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n) namespace="$2"; shift 2 ;;
+      *)  env_args+=("$1"); shift ;;
+    esac
+  done
+  local ns_flag="-A"
+  [[ -n "$namespace" ]] && ns_flag="-n $namespace"
+  environments=($(envCheck "${env_args[@]}"))
   for environment in "${environments[@]}"; do
-    echo "${PURPLE}Checking jobs in $environment...${NC}"
-    local result=$(kubectl get jobs --context "$environment/main" --no-headers -A 2>/dev/null | grep -v "1/1")
+    echo "${PURPLE}Checking jobs in $environment${namespace:+ ($namespace)}...${NC}"
+    local result=$(kubectl get jobs --context "$environment/main" --no-headers $ns_flag 2>/dev/null | grep -v "1/1")
     if [[ -z "$result" ]]; then
       echo "${GREEN}No failed jobs found${NC}"
     else

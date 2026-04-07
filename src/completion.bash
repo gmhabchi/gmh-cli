@@ -89,12 +89,32 @@ _env_complete() {
 
 # podCheck completion
 _podCheck_complete() {
-    _env_complete
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ "$prev" == "-n" ]]; then
+        local namespaces=$(kubectl get namespaces 2>/dev/null | awk 'NR>1 {print $1}')
+        COMPREPLY=($(compgen -W "$namespaces" -- "$cur"))
+    elif [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "-n" -- "$cur"))
+    else
+        _env_complete
+    fi
 }
 
 # jobCheck completion
 _jobCheck_complete() {
-    _env_complete
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ "$prev" == "-n" ]]; then
+        local namespaces=$(kubectl get namespaces 2>/dev/null | awk 'NR>1 {print $1}')
+        COMPREPLY=($(compgen -W "$namespaces" -- "$cur"))
+    elif [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "-n" -- "$cur"))
+    else
+        _env_complete
+    fi
 }
 
 # podClean completion - supports both env and namespace

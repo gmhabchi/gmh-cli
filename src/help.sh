@@ -133,6 +133,8 @@ ghelp() {
       echo "${PURPLE}Usage${GREEN}: podCheck${NC} - Check all environments"
       echo "${PURPLE}Usage${GREEN}: podCheck stg${NC} - Check staging environments"
       echo "${PURPLE}Usage${GREEN}: podCheck <ENVIRONMENT>${NC} - Check specific environment"
+      echo "${PURPLE}Usage${GREEN}: podCheck -n <NAMESPACE>${NC} - Check specific namespace across all environments"
+      echo "${PURPLE}Usage${GREEN}: podCheck -n <NAMESPACE> <ENVIRONMENT>${NC} - Check specific namespace in specific environment"
       ;;
     "podClean")
       echo "I clean up failed/errored pods across environments"
@@ -146,6 +148,8 @@ ghelp() {
       echo "${PURPLE}Usage${GREEN}: jobCheck${NC} - Check all environments"
       echo "${PURPLE}Usage${GREEN}: jobCheck stg${NC} - Check staging environments"
       echo "${PURPLE}Usage${GREEN}: jobCheck <ENVIRONMENT>${NC} - Check specific environment"
+      echo "${PURPLE}Usage${GREEN}: jobCheck -n <NAMESPACE>${NC} - Check specific namespace across all environments"
+      echo "${PURPLE}Usage${GREEN}: jobCheck -n <NAMESPACE> <ENVIRONMENT>${NC} - Check specific namespace in specific environment"
       ;;
     "jobClean")
       echo "I clean up failed jobs across environments"

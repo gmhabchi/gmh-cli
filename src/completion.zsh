@@ -40,12 +40,28 @@ _gmh_env_zsh() {
 
 # podCheck completion
 _podCheck_zsh() {
-  _gmh_env_zsh
+  local context state line
+  _arguments \
+    '(-n)-n[filter by namespace]:namespace:->namespace' \
+    '*:environment:_gmh_env_zsh'
+  if [[ "$state" == "namespace" ]]; then
+    local namespaces
+    namespaces=(${(f)"$(kubectl get namespaces 2>/dev/null | awk 'NR>1 {print $1}')"})
+    _values 'namespace' $namespaces
+  fi
 }
 
 # jobCheck completion
 _jobCheck_zsh() {
-  _gmh_env_zsh
+  local context state line
+  _arguments \
+    '(-n)-n[filter by namespace]:namespace:->namespace' \
+    '*:environment:_gmh_env_zsh'
+  if [[ "$state" == "namespace" ]]; then
+    local namespaces
+    namespaces=(${(f)"$(kubectl get namespaces 2>/dev/null | awk 'NR>1 {print $1}')"})
+    _values 'namespace' $namespaces
+  fi
 }
 
 # podClean completion
