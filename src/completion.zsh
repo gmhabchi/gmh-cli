@@ -24,8 +24,8 @@ _gmh_pulumi_envs=(dabble internal root)
 
 # Pulumi stack environments
 _gmh_pulumi_stack_envs=(
-  staging staging-us staging-uk staging-use2 staging-euw2
-  production production-us production-uk production-use2 production-euw2
+  staging staging-apse2 staging-us staging-uk staging-use2 staging-euw2
+  production production-apse2 production-us production-uk production-use2 production-euw2
 )
 
 # dockerKill completion
@@ -176,6 +176,15 @@ _natGateways_zsh() {
   fi
 }
 
+# run_intervals completion
+_run_intervals_zsh() {
+  _arguments \
+    '(-n)-n[number of runs]:count' \
+    '(-w)-w[wait between runs]:wait (e.g. 10, 2m, 1h)' \
+    '--[end of run_intervals flags]' \
+    '*::command:_command_names'
+}
+
 # ghelp completion
 _ghelp_zsh() {
   _values 'function' \
@@ -185,7 +194,7 @@ _ghelp_zsh() {
     kubectl_secrets pstack penv psecrets nodeCount podCheck \
     jobCheck podClean jobClean vmLogs logsCronjob vmCheck \
     natGateways html-live downloadVideo aws_sso_session \
-    ghistory glock gbright ginstall
+    ghistory glock gbright ginstall run_intervals
 }
 
 # html-live completion
@@ -256,6 +265,7 @@ compdef _downloadVideo_zsh downloadVideo
 compdef _ghistory_zsh ghistory
 compdef _whoareyou_zsh whoareyou
 compdef _git_update_dir_zsh git_update_dir
+compdef _run_intervals_zsh run_intervals
 
 # Simple completions
 compdef _gmh_env_zsh alogin aws-login glogin

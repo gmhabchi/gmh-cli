@@ -40,6 +40,7 @@ glock
 gbright
 ginstall
 ghelp
+run_intervals
 "
 
 # Environment names
@@ -66,11 +67,13 @@ _gmh_pulumi_stack_envs="
 staging
 staging-us
 staging-uk
+staging-apse2
 staging-use2
 staging-euw2
 production
 production-us
 production-uk
+production-apse2
 production-use2
 production-euw2
 "
@@ -259,6 +262,20 @@ _PWgen_complete() {
     fi
 }
 
+# run_intervals completion
+_run_intervals_complete() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ "$prev" == "-n" ]]; then
+        COMPREPLY=($(compgen -W "1 3 5 10" -- "$cur"))
+    elif [[ "$prev" == "-w" ]]; then
+        COMPREPLY=($(compgen -W "5 10 30 60 2m 5m 10m 1h" -- "$cur"))
+    elif [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "-n -w --" -- "$cur"))
+    fi
+}
+
 # Register completions for each function
 complete -F _dockerKill_complete dockerKill
 complete -F _podCheck_complete podCheck
@@ -279,6 +296,7 @@ complete -F _natGateways_complete natGateways
 complete -F _ghelp_complete ghelp
 complete -F _html_live_complete html-live
 complete -F _PWgen_complete PWgen
+complete -F _run_intervals_complete run_intervals
 
 # Basic completions for functions that don't need custom logic
 complete -W "$_gmh_envs" aws-login alogin glogin

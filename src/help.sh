@@ -53,6 +53,7 @@ ghelp() {
     echo -e "  ${RED}whoareyou${NC}: Display current user identity"
     echo -e "  ${RED}git_update_dir${NC}: Pull latest master for all repos in directory"
     echo -e "  ${RED}lnetwork${NC}: List network devices using ARP"
+    echo -e "  ${RED}run_intervals${NC}: Run a command N times with a wait period between runs"
     echo ""
   else
     case $1 in
@@ -234,6 +235,19 @@ ghelp() {
       ;;
     "dabble")
       figlet 👌abble
+      ;;
+    "run_intervals")
+      echo "I run a command N times with a configurable wait period between each run"
+      echo "${PURPLE}Usage${GREEN}: run_intervals -n <count> -w <wait> -- <command> [args...]${NC}"
+      echo ""
+      echo "${GREEN}Options:${NC}"
+      echo "  -n  Number of times to run the command"
+      echo "  -w  Wait period between runs (supports sleep suffixes: s, m, h)"
+      echo "  --  Separator before the command and its arguments"
+      echo ""
+      echo "${GREEN}Examples:${NC}"
+      echo "  run_intervals -n 5 -w 10 -- echo hello"
+      echo "  run_intervals -n 3 -w 2m -- ./check-status.sh"
       ;;
     "airflow_pod_clean")
       echo "I list or clean Airflow failed pods (legacy - consider using podClean)"

@@ -124,19 +124,27 @@ dockerStop() {
   orb stop
 }
 
+orbStatus() {
+  orb status 2>/dev/null
+}
+
 # Check if OrbStack is running, start if not
 dockerCheck() {
-  if ! orb status &>/dev/null; then
+  local orbStat
+  orbStat=$(orbStatus | tr '[:upper:]' '[:lower:]')
+  if [[ "$orbStat" != "running" ]]; then
     echo "Starting Orb"
     orb start
   fi
   orb &>/dev/null
+  orbStatus
 }
 
 # Update FathomDB permissions for a given environment
 fathomDB() {
   export PULUMI_SKIP_UPDATE_CHECK="true"
-  environment=$1
+  local environment=$1
+  local folder
   folder=$(basename "$PWD")
   dockerCheck
   if [[ -n $environment ]] && [[ "$folder" == "fathom" ]]; then
@@ -150,14 +158,6 @@ fathomDB() {
     echo "${RED}Environment:${NC} $environment"
     echo "${RED}Directory:${NC} $folder"
   fi
-}
-
-# SSHUTTLE - KUTTLE'
-kuttle_init() {
-  kuttle_env=${1:-"production-internal"}
-  kubectl config use-context "${kuttle_env}/main"
-  kubectl config set-context --current --namespace=default
-  sshuttle -r "$(kubectl get pod -l app.kubernetes.io/name=kuttle -o jsonpath="{.items[0].metadata.name}" -n default)" -e kuttle 10.0.0.0/8
 }
 
 # Airflow pod clean (legacy - consider using: podClean <env>-internal airflow)
@@ -220,7 +220,8 @@ PWgen() {
 
 # Pull latest master for all git repos in a directory
 git_update_dir() {
-  directory=${1:-"."}
+  local directory=${1:-"."}
+  local subdir
   for subdir in "$directory"/*/; do
     if [ -d "$subdir.git" ]; then
       echo "Processing repository: $subdir"
@@ -234,12 +235,13 @@ git_update_dir() {
   done
 }
 
-# Search AWS Cognito for users by phone number
+# Search AWS Cognito for users by phone number or user_id across environments
 cognito_search() {
-  PHONE_NUMBER="$1"
+  local SEARCH_VALUE="$1"
+  local ENVIRONMENT COUNTRY_CODE CLEAN_ENVIRONMENT USER_POOL PHONE_NUMBER RESULT
 
-  if [ -z "$PHONE_NUMBER" ]; then
-    error "Missing Phone Number"
+  if [ -z "$SEARCH_VALUE" ]; then
+    error "Missing search value (phone number or custom:user_id)"
     return
   fi
 
@@ -277,28 +279,43 @@ cognito_search() {
   }
 }')
 
-  if [[ "${PHONE_NUMBER:0:1}" != "+" ]]; then
-    PHONE_NUMBER="${PHONE_NUMBER/#0/}"
-    PHONE_NUMBER="${COUNTRY_CODE}${PHONE_NUMBER}"
+  USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
+
+  # Detect search mode: phone number vs custom:user_id
+  if [[ "$SEARCH_VALUE" =~ ^[+]?[0-9]+$ ]]; then
+    PHONE_NUMBER="$SEARCH_VALUE"
+    if [[ "${PHONE_NUMBER:0:1}" != "+" ]]; then
+      PHONE_NUMBER="${PHONE_NUMBER/#0/}"
+      PHONE_NUMBER="${COUNTRY_CODE}${PHONE_NUMBER}"
+    fi
+    echo "${GREEN}Searching for Phone Number: ${PURPLE}$PHONE_NUMBER${NC} in ${GREEN}$CLEAN_ENVIRONMENT${NC}"
+    RESULT=$(aws cognito-idp list-users \
+      --user-pool-id "$USER_POOL" \
+      --profile "$ENVIRONMENT" \
+      --limit 20 \
+      --filter "phone_number=\"$PHONE_NUMBER\"" | jq '.Users')
+  else
+    echo "${GREEN}Searching for custom:user_id: ${PURPLE}$SEARCH_VALUE${NC} in ${GREEN}$CLEAN_ENVIRONMENT${NC}"
+    echo "${YELLOW}Note: custom attributes aren't filterable server-side; scanning pool...${NC}"
+    RESULT=$(aws cognito-idp list-users \
+      --user-pool-id "$USER_POOL" \
+      --profile "$ENVIRONMENT" \
+      | jq --arg uid "$SEARCH_VALUE" \
+        '[.Users[] | select(.Attributes[]? | (.Name == "custom:user_id" and .Value == $uid))]')
   fi
 
-  echo "${GREEN}Searching for Phone Number: ${PURPLE}$PHONE_NUMBER${NC} in ${GREEN}$CLEAN_ENVIRONMENT${NC}"
-
-  USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
-  query=(aws cognito-idp list-users --user-pool-id "$USER_POOL" --profile "$ENVIRONMENT" --limit 20 --filter "phone_number=\"$PHONE_NUMBER\"")
-
   if [[ "$3" == "count" || "$2" == "count" ]]; then
-    "${query[@]}" | jq '.Users | length'
+    echo "$RESULT" | jq 'length'
   else
-    "${query[@]}" | jq '.Users'
+    echo "$RESULT"
   fi
 }
 
 # Get and decrypt Kubernetes secrets
 kubectl_secrets() {
-  NAME=$1
-  ENVIRONMENT=$2
-  NAMESPACE=$3
+  local NAME=$1
+  local ENVIRONMENT=$2
+  local NAMESPACE=$3
 
   # Security warning
   echo "${RED}⚠️  WARNING: This will display sensitive secrets in the terminal!${NC}"
@@ -325,47 +342,73 @@ kubectl_secrets() {
 }
 
 # Change Pulumi stack based on current directory
+# Usage: pstack <environment> [region]
+#   pstack staging               -> staging[-<service>]
+#   pstack staging-apse2         -> staging-apse2[-<service>]
+#   pstack production use2       -> production-use2[-<service>]
 pstack () {
-  ENVIRONMENT=$1
-  NAME=$(basename "$PWD") 
-  export PULUMI_SKIP_UPDATE_CHECK="true" 
-  if [[ "$NAME" =~ ^(dabble-accounts|internal-accounts|root-account)$ ]]
-  # Main Stacks in the Cloud Repo
+  local ENVIRONMENT=$1
+  local REGION=$2
+  local NAME
+  NAME=$(basename "$PWD")
+  local STACK="${PWD##*/}"
+  local SERVICE SUFFIX BASE TARGET
+  export PULUMI_SKIP_UPDATE_CHECK="true"
+
+  if [[ "$NAME" == ".deploy" ]]
+  # Stacks using the <service root>/.deploy folder
   then
-          NAME=""
-  elif [[ "$NAME" = ".deploy" ]]
-  # Stacks using the .deploy folder
-  then
-          NAME="$(basename "$(dirname "$PWD")")" 
-          NAME="-$NAME"
+          SERVICE="$(basename "$(dirname "$PWD")")"
+          STACK="$SERVICE/"
+          NAME="-$SERVICE"
   elif [[ "$NAME" == "deploy" ]]
-  # Stacks using the package/deploy folder
+  # Stacks using the <service root>/packages/deploy folder
   then
-          NAME="$(basename "$(dirname "$(dirname "$PWD")")")" 
-          NAME="-$NAME"
+          SERVICE="$(basename "$(dirname "$(dirname "$PWD")")")"
+          STACK="$SERVICE/"
+          NAME="-$SERVICE"
   elif [[ "$NAME" == *_* ]]
-  then
   # Data stacks with suffixes
-          SUFFIX="-${NAME#*_}"
-          NAME="-$(basename "$(dirname "$PWD")")$SUFFIX"
-  else
-          NAME="-$NAME" 
-  fi
-  if [ -n "$ENVIRONMENT" ]
   then
-          echo "Changing to the following pulumi stack - ${GREEN}$ENVIRONMENT$NAME${NC}"
-          pulumi stack select "$ENVIRONMENT$NAME"
+          SUFFIX="-${NAME#*_}"
+          SERVICE="$(basename "$(dirname "$PWD")")"
+          STACK="$SERVICE/"
+          NAME="-$SERVICE$SUFFIX"
   else
+          NAME=""
+  fi
+
+  if [ -z "$ENVIRONMENT" ]
+  then
           echo "${RED}Missing ENVIRONMENT${NC}"
           echo "${GREEN}  ENVIRONMENT:${NC} ${ENVIRONMENT}"
+          return 1
   fi
+
+  BASE="$ENVIRONMENT${REGION:+-$REGION}"
+
+  # Try service-suffixed name first (e.g. staging-euw2-transactions),
+  # then the bare name (e.g. staging-apse2)
+  for TARGET in "$BASE$NAME" "$BASE"
+  do
+          if pulumi stack select "$TARGET" 2>/dev/null
+          then
+                  echo "Changed to pulumi stack - ${GREEN}$STACK: $TARGET${NC}"
+                  return 0
+          fi
+  done
+
+  echo "${RED}No matching stack (tried: $BASE$NAME, $BASE). Available stacks:${NC}"
+  pulumi stack ls
+  return 1
 }
 
 # Change Pulumi login environment (dabble, internal, root)
 penv() {
-  ENVIRONMENT=$1
+  local ENVIRONMENT=$1
+  local SUFFIX
+  local ENVIRONMENTS=(dabble internal root)
   export PULUMI_SKIP_UPDATE_CHECK="true"
-  ENVIRONMENTS=(dabble internal root)
   if [ -n "$ENVIRONMENT" ] && [[ "${ENVIRONMENTS[*]}" =~ ${ENVIRONMENT} ]]; then
     if [ "$ENVIRONMENT" = "root" ]; then
       SUFFIX="-account"
@@ -377,6 +420,7 @@ penv() {
     echo "${RED}ENVIRONMENT Error${NC}"
     echo "${GREEN}  ENVIRONMENT: ${RED}${ENVIRONMENT}"
     echo "${GREEN}Allowed Environments:"
+    local ENV
     for ENV in "${ENVIRONMENTS[@]}"; do
       echo "${PURPLE}$ENV${NC}"
     done
@@ -385,7 +429,8 @@ penv() {
 
 # Show and decrypt Pulumi secrets for current or specified stack
 psecrets() {
-  ENVIRONMENT=$1
+  local ENVIRONMENT=$1
+  local name
   if [ -n "$ENVIRONMENT" ]; then
     pstack "$ENVIRONMENT"
   fi
@@ -430,6 +475,7 @@ podCheck() {
   done
   local ns_flag="-A"
   [[ -n "$namespace" ]] && ns_flag="-n $namespace"
+  local environments environment
   environments=($(envCheck "${env_args[@]}"))
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Checking pods in $environment${namespace:+ ($namespace)}...${NC}"
@@ -456,6 +502,7 @@ jobCheck() {
   done
   local ns_flag="-A"
   [[ -n "$namespace" ]] && ns_flag="-n $namespace"
+  local environments environment
   environments=($(envCheck "${env_args[@]}"))
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Checking jobs in $environment${namespace:+ ($namespace)}...${NC}"
@@ -473,6 +520,7 @@ jobCheck() {
 # Usage: podClean [environment...] or podClean <environment> <namespace>
 podClean() {
   local namespace=""
+  local environments environment
   # Check if second arg looks like a namespace (not an environment shortcut)
   if [[ -n "$2" && ! "$2" =~ ^(stg|prod|stg-us|stg-uk|prod-us|prod-uk)$ ]]; then
     namespace="$2"
@@ -521,6 +569,7 @@ podClean() {
 # Usage: jobClean [environment...] or jobClean <environment> <namespace>
 jobClean() {
   local namespace=""
+  local environments environment
   # Check if second arg looks like a namespace (not an environment shortcut)
   if [[ -n "$2" && ! "$2" =~ ^(stg|prod|stg-us|stg-uk|prod-us|prod-uk)$ ]]; then
     namespace="$2"
@@ -616,6 +665,10 @@ natGateways() {
     PROFILES=("${AWS_ENVIRONMENTS[@]}")
   fi
 
+  echo "${PURPLE}Note:${NC} This command may take some time as it queries each AWS profile for NAT Gateways with public IPs..."
+  # add a spinner or progress indicator here for waiting
+
+
   {
     printf "Profile\tName\tPublic IP\n"
 
@@ -702,6 +755,29 @@ aws_sso_session() {
   else
     echo "expired"
   fi
+}
+
+# Run a command N times with a wait period between each run
+run_intervals() {
+  local usage="Usage: run_intervals -n <count> -w <wait> -- <command> [args...]"
+  local count= wait=
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -n) count=$2; shift 2 ;;
+      -w) wait=$2;  shift 2 ;;
+      --) shift; break ;;
+      *)  echo "$usage" >&2; return 1 ;;
+    esac
+  done
+
+  [[ -z $count || -z $wait || $# -eq 0 ]] && { echo "$usage" >&2; return 1; }
+
+  for ((i = 1; i <= count; i++)); do
+    echo "[run_intervals] Run $i/$count: $*"
+    "$@"
+    [[ $i -lt $count ]] && sleep "$wait"
+  done
 }
 
 # Show shell history from N days ago
