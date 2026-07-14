@@ -134,9 +134,18 @@ dockerCheck() {
   orbStat=$(orbStatus | tr '[:upper:]' '[:lower:]')
   if [[ "$orbStat" != "running" ]]; then
     echo "Starting Orb"
-    orb start
+    ( orb start &>/dev/null & ) 2>/dev/null
+
+    local tries=0
+    until [[ "$(orbStatus | tr '[:upper:]' '[:lower:]')" == "running" ]]; do
+      ((tries++))
+      if (( tries > 30 )); then
+        echo "${RED}Orb failed to reach running state after 30s${NC}"
+        return 1
+      fi
+      sleep 1
+    done
   fi
-  orb &>/dev/null
   orbStatus
 }
 
