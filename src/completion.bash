@@ -95,11 +95,13 @@ _podCheck_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    if [[ "$prev" == "-n" ]]; then
+    if [[ "$prev" == "-n" || "$prev" == "--namespace" ]]; then
         local namespaces=$(kubectl get namespaces 2>/dev/null | awk 'NR>1 {print $1}')
         COMPREPLY=($(compgen -W "$namespaces" -- "$cur"))
+    elif [[ "$prev" == "-t" || "$prev" == "--type" ]]; then
+        COMPREPLY=($(compgen -W "status resource" -- "$cur"))
     elif [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "-n" -- "$cur"))
+        COMPREPLY=($(compgen -W "-n --namespace -t --type" -- "$cur"))
     else
         _env_complete
     fi

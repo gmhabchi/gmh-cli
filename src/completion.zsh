@@ -43,6 +43,7 @@ _podCheck_zsh() {
   local context state line
   _arguments \
     '(-n)-n[filter by namespace]:namespace:->namespace' \
+    '(-t --type)-t[check type]:type:(status resource)' \
     '*:environment:_gmh_env_zsh'
   if [[ "$state" == "namespace" ]]; then
     local namespaces

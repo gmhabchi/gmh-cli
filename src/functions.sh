@@ -77,9 +77,50 @@ pdelete() {
   fi
 }
 
-#List things on the Network
+# List devices on the Network (name, IP, MAC, interface)
+# Falls back to MAC vendor lookup (via nmap's OUI database) when no hostname resolves
 lnetwork() {
-  arp -a
+  local macfile="" nmap_prefix
+  if command -v brew &>/dev/null; then
+    nmap_prefix=$(brew --prefix nmap 2>/dev/null)
+    [[ -n "$nmap_prefix" && -f "$nmap_prefix/share/nmap/nmap-mac-prefixes" ]] && macfile="$nmap_prefix/share/nmap/nmap-mac-prefixes"
+  fi
+
+  {
+    printf "Name\tIP\tMAC\tInterface\n"
+    arp -a | awk -v macfile="$macfile" '
+      BEGIN {
+        if (macfile != "") {
+          while ((getline line < macfile) > 0) {
+            split(line, parts, " ")
+            prefix = parts[1]
+            vendor[prefix] = substr(line, length(prefix) + 2)
+          }
+          close(macfile)
+        }
+      }
+      {
+        ip = $2
+        gsub(/[()]/, "", ip)
+        if (ip ~ /^(224\.|239\.)/ || ip ~ /\.255$/ || $4 == "(incomplete)") next
+        name = $1
+        if (name == "?") {
+          mac = $4
+          gsub(/:/, "", mac)
+          prefix = toupper(substr(mac, 1, 6))
+          name = (prefix in vendor) ? "(" vendor[prefix] ")" : "-"
+        }
+        print name "\t" ip "\t" $4 "\t" $6
+      }'
+  } | column -t -s $'\t' \
+    | awk -v green="${GREEN:-}" -v nc="${NC:-}" '
+        NR==1 {
+          print green $0 nc
+          for (i=1;i<=length($0);i++) printf "-"; printf "\n"
+          next
+        }
+        { print }
+      '
 }
 
 # Stop and remove Docker containers or kill Docker/OrbStack
@@ -290,6 +331,8 @@ cognito_search() {
 
   USER_POOL=$(aws cognito-idp list-user-pools --max-results 2 --profile "$ENVIRONMENT" | jq -r '.UserPools[].Id')
 
+  echo User Pool ID: ${PURPLE}$USER_POOL${NC}
+
   # Detect search mode: phone number vs custom:user_id
   if [[ "$SEARCH_VALUE" =~ ^[+]?[0-9]+$ ]]; then
     PHONE_NUMBER="$SEARCH_VALUE"
@@ -471,29 +514,84 @@ nodeCount() {
   fi
 }
 
-# Check for non-running/non-completed pods across environments
-# Usage: podCheck [-n namespace] [environment...]
+# Check for non-running/non-completed pods or pods without resources across environments
+# Usage: podCheck [-n namespace] [-t type] [environment...]
+#   -t type         : Check type - "status" (default) or "resource"
+#                    status   : Show pods not Running or Completed
+#                    resource : Show pods without resource requests or memory limits
 podCheck() {
-  local namespace=""
+  local namespace
+  local check_type="status"
   local env_args=()
+  local pods_json result status_result pod_name pod_namespace container_name has_issues
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -n) namespace="$2"; shift 2 ;;
+      -t|--type) check_type="$2"; shift 2 ;;
       *)  env_args+=("$1"); shift ;;
     esac
   done
-  local ns_flag="-A"
-  [[ -n "$namespace" ]] && ns_flag="-n $namespace"
+
+  # Validate check type
+  if [[ "$check_type" != "status" && "$check_type" != "resource" ]]; then
+    echo "${RED}Error: Invalid check type '$check_type'. Use 'status' or 'resource'.${NC}"
+    return 1
+  fi
+
+  # Build kubectl namespace flags as array to avoid zsh quoting issues
+  local -a ns_args
+  if [[ -n "${namespace:-}" ]]; then
+    ns_args=(-n "$namespace")
+  else
+    ns_args=(-A)
+  fi
   local environments environment
   environments=($(envCheck "${env_args[@]}"))
+
   for environment in "${environments[@]}"; do
-    echo "${PURPLE}Checking pods in $environment${namespace:+ ($namespace)}...${NC}"
-    local result=$(kubectl get pods --context "$environment/main" --no-headers $ns_flag 2>/dev/null | grep -v "Running\|Completed")
-    if [[ -z "$result" ]]; then
-      echo "${GREEN}No problem pods found${NC}"
+    local context="$environment/main"
+
+    if [[ "$check_type" == "status" ]]; then
+      echo "${PURPLE}Checking pods status in $environment${namespace:+ ($namespace)}...${NC}"
+      status_result=$(kubectl get pods --context "$context" --no-headers ${ns_args[@]} 2>/dev/null | grep -v "Running\|Completed")
+      if [[ -z "$status_result" ]]; then
+        echo "${GREEN}No problem pods found${NC}"
+      else
+        echo "$status_result"
+      fi
     else
-      echo "$result"
+      echo "${PURPLE}Checking pod resources in $environment${namespace:+ ($namespace)}...${NC}"
+      
+      # Get all pods as JSON and check for missing resource requests/limits
+      pods_json=$(kubectl get pods --context "$context" ${ns_args[@]} -o json 2>&1)
+      
+      has_issues=false
+      
+      # Use jq to find pods with missing resources - check if resources.requests or resources.limits is null or missing
+      result=$(printf "%s" "$pods_json" | jq -r '
+        .items[] | . as $pod | 
+        .spec.containers[] | 
+        select(.resources == null or .resources.requests == null or .resources.limits == null or .resources.limits.memory == null) | 
+        "\($pod.metadata.name) \($pod.metadata.namespace) \(.name)"
+      ' 2>/dev/null)
+      
+      if [[ -n "$result" ]]; then
+        while IFS= read -r line; do
+          [[ -z "$line" ]] && continue
+          pod_name=$(echo "$line" | cut -d' ' -f1)
+          pod_namespace=$(echo "$line" | cut -d' ' -f2)
+          container_name=$(echo "$line" | cut -d' ' -f3-)
+          
+          echo "${RED}$pod_name${NC} ($pod_namespace/$container_name): missing requests memory_limits"
+          has_issues=true
+        done <<< "$result"
+      fi
+      
+      if [[ "$has_issues" == "false" ]]; then
+        echo "${GREEN}All pods have resource requests and memory limits set${NC}"
+      fi
     fi
+
     echo ""
   done
 }
@@ -515,7 +613,7 @@ jobCheck() {
   environments=($(envCheck "${env_args[@]}"))
   for environment in "${environments[@]}"; do
     echo "${PURPLE}Checking jobs in $environment${namespace:+ ($namespace)}...${NC}"
-    local result=$(kubectl get jobs --context "$environment/main" --no-headers $ns_flag 2>/dev/null | grep -v "1/1")
+    local result=$(kubectl get jobs --context "$environment/main" $ns_flag 2>/dev/null | grep -v "1/1")
     if [[ -z "$result" ]]; then
       echo "${GREEN}No failed jobs found${NC}"
     else
@@ -858,6 +956,7 @@ ginstall() {
     "kubectx:kubectx"
     "figlet:figlet"
     "yt-dlp:yt-dlp"
+    "nmap:nmap"
   )
 
   echo "${PURPLE}=== Checking Required Dependencies ===${NC}"
